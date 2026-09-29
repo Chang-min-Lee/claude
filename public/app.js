@@ -1,4 +1,5 @@
-// 진로AI 코치 — 데이터는 브라우저(localStorage)에만 저장됩니다.
+// 진로AI 코치 — 코어: 상태·동기화·화면 전환·홈·진로탐색·학습관리·AI 코치·계정
+const PREVIEW = false; // 미리보기 빌드에서만 true (서버 없이 동작하는 기능만 남김)
 const GROUPS = { elementary: { kid: true }, middle: {}, high: {}, college: {}, adult: {} };
 const groupLabel = (g) => t('g_' + g);
 const levelLabel = (g) => t('lv_' + g);
@@ -13,32 +14,50 @@ const store = {
   get: (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } },
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
-const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const pad = (n) => String(n).padStart(2, '0');
 const dk = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => dk();
+const clone = (v) => JSON.parse(JSON.stringify(v));
 
-let state = {
-  profile: store.get('profile', null),
-  answers: store.get('answers', {}),
-  tasks: store.get('tasks', []),
-  log: store.get('log', {}), // { 'YYYY-MM-DD': 공부 분 }
-  chat: store.get('chat', []),
-  quiz: store.get('quiz', []), // [{date, subject, score, total}]
-  wrong: store.get('wrong', []), // 틀린 문제 [{subject, q, choices, answer, explain}]
-  deep: store.get('deep', {}), // 심층검사 기록 { testId: [{date, cat, overall, v}] } 최근 5개
-  token: store.get('token', null),
-  user: null,
-  tab: 'home',
+// ---- 상태: 동기화되는 데이터 키와 기본값 ----
+const DEFAULTS = {
+  profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {},
+  consent: { wellbeing: false }, schedule: [], weekplan: [], weekhist: [],
+  goal: { type: 'general', label: '', date: '', note: '', milestones: [] },
+  grades: [], checkins: [], closeouts: [], diag: {},
 };
-const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong', 'deep'];
+const SYNC = Object.keys(DEFAULTS);
+const normalize = (k, v) => (v === null || v === undefined ? clone(DEFAULTS[k]) : (k === 'goal' || k === 'consent' ? { ...DEFAULTS[k], ...v } : v));
+
+let state = { token: store.get('token', null), user: null, tab: 'home', sub: { plan: 'schedule', report: 'comp' }, viewAs: null, ro: false, notice: null };
+SYNC.forEach((k) => { state[k] = normalize(k, store.get(k, null)); });
+if (state.goal && !Array.isArray(state.goal.milestones)) state.goal.milestones = [];
+
+const dirty = new Set(); // 서버로 아직 보내지 않은 키만 전송해서, 다른 기기·강사가 바꾼 다른 키를 덮어쓰지 않는다
 let pushTimer;
-function schedulePush() {
-  if (!state.token || state.user?.role !== 'learner') return;
-  clearTimeout(pushTimer);
-  pushTimer = setTimeout(() => api('/api/data', { method: 'PUT', body: { data: Object.fromEntries(SYNC.map((k) => [k, state[k]])) } }).catch(() => {}), 800);
+function saveTarget() { // 저장 대상: 내 계정 / 열어 둔 학생(강사) / 저장 안 함(읽기 전용·비로그인)
+  if (PREVIEW || !state.token || state.ro) return null;
+  if (state.viewAs) return `/api/students/${state.viewAs.id}/data`;
+  return state.user?.role === 'learner' ? '/api/data' : null;
 }
-const save = (k) => { store.set(k, state[k]); if (SYNC.includes(k)) schedulePush(); };
+async function flush() {
+  const url = saveTarget(), keys = [...dirty];
+  if (!url || !keys.length) return;
+  try { await api(url, { method: 'PUT', body: { data: Object.fromEntries(keys.map((k) => [k, state[k]])) } }); keys.forEach((k) => dirty.delete(k)); } catch { /* 다음 저장 때 다시 시도 */ }
+}
+function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(flush, 700); }
+const save = (k) => {
+  if (!state.viewAs) store.set(k, state[k]);
+  if (SYNC.includes(k)) { dirty.add(k); if (saveTarget()) schedulePush(); }
+};
+function loadData(data, persistLocal = false) { // 서버 데이터로 상태를 통째로 교체
+  SYNC.forEach((k) => { state[k] = normalize(k, data?.[k]); if (persistLocal) store.set(k, state[k]); });
+}
+function adopt(data) { // 아직 보내지 않은 내 변경(dirty)이 없는 키만 서버 값으로 갱신
+  SYNC.forEach((k) => { if (data[k] !== undefined && data[k] !== null && !dirty.has(k)) { state[k] = normalize(k, data[k]); if (!state.viewAs) store.set(k, state[k]); } });
+}
+function clearLocal() { SYNC.forEach((k) => store.set(k, null)); store.set('comp_draft', null); loadData({}); }
 
 async function api(path, { method = 'GET', body } = {}) {
   let r;
@@ -47,22 +66,38 @@ async function api(path, { method = 'GET', body } = {}) {
   if (!r.ok) throw new Error(j.error || t('req_failed'));
   return j;
 }
-function adopt(data) { SYNC.forEach((k) => { if (data[k] !== undefined && data[k] !== null) { state[k] = data[k]; store.set(k, data[k]); } }); }
 async function afterAuth(res) {
   state.token = res.token; state.user = res.user; store.set('token', res.token);
-  if (res.user.role === 'guardian') { state.tab = 'dash'; return; }
+  state.viewAs = null; state.ro = false; state.sub = { plan: 'schedule', report: 'comp' };
+  const role = res.user.role;
+  if (role === 'guardian') { loadData({}); state.tab = 'dash'; return; }
+  if (role === 'teacher' || role === 'admin') { loadData({}); state.tab = 'roster'; if (typeof roster !== 'undefined') roster.loaded = false; return; }
   const me = await api('/api/me');
-  if (me.data.profile) adopt(me.data); else schedulePush(); // 서버에 기존 데이터가 있으면 그것을 사용, 없으면 이 기기 데이터를 올림
+  if (me.data.profile) { dirty.clear(); loadData(me.data, true); } else { SYNC.forEach((k) => dirty.add(k)); schedulePush(); } // 서버에 데이터가 없으면 이 기기 데이터를 올림
   state.tab = 'home';
 }
-async function boot() {
+async function poll() { // 다른 기기·강사가 바꾼 내용을 가져온다 (입력 중이면 화면은 건드리지 않음)
+  if (document.hidden || dirty.size || !state.token || PREVIEW) return;
+  try {
+    let data;
+    if (state.viewAs) data = (await api(`/api/students/${state.viewAs.id}`)).data;
+    else if (state.user?.role === 'learner') data = (await api('/api/me')).data;
+    else return;
+    const before = JSON.stringify(SYNC.map((k) => state[k]));
+    adopt(data);
+    const el = document.activeElement;
+    if (before !== JSON.stringify(SYNC.map((k) => state[k])) && !(el && /INPUT|TEXTAREA|SELECT/.test(el.tagName)) && !(typeof tv !== 'undefined' && tv.mode === 'take')) render();
+  } catch { /* 네트워크 오류는 무시 */ }
+}
+async function bootAuth() {
   if (state.token) {
     try {
       const me = await api('/api/me'); state.user = me.user;
-      if (me.user.role === 'learner') { if (me.data.profile) adopt(me.data); else schedulePush(); } else state.tab = 'dash';
+      const role = me.user.role;
+      if (role === 'learner') { if (me.data.profile) { dirty.clear(); loadData(me.data, true); } else { SYNC.forEach((k) => dirty.add(k)); schedulePush(); } }
+      else { loadData({}); state.tab = role === 'guardian' ? 'dash' : 'roster'; }
     } catch { state.token = null; store.set('token', null); }
   }
-  render();
 }
 
 // ---- 계산 ----
@@ -86,25 +121,47 @@ function streak() {
 function profileForAI() {
   const top = answered() === Q().length ? topTypes().map((ty) => `${R()[ty].name}(${ty})`).join(', ') : '';
   const deep = TEST_IDS.filter((id) => id !== 'wellbeing' && state.deep[id]?.length).map((id) => `${tx(id).name}: ${describeTest(id, state.deep[id].at(-1)).headline}`).join(' / ');
-  return { name: state.profile.name, group: state.profile.group, riasec: top, deep, tasks: state.tasks.filter((t) => !t.done).map((t) => t.text).slice(0, 10).join(' / ') };
+  return { name: state.profile.name, group: state.profile.group, riasec: top, deep, tasks: state.tasks.filter((x) => !x.done).map((x) => x.text).slice(0, 10).join(' / ') };
 }
 
-// ---- 화면 ----
-const LEARNER_TABS = ['home', 'explore', 'tests', 'study', 'quiz', 'coach', 'account'];
+// ---- 화면 전환 ----
+const LEARNER_TABS = ['home', 'explore', 'tests', 'study', 'plan', 'report', 'quiz', 'coach', 'account'];
+const STUDENT_VIEW_TABS = ['home', 'tests', 'study', 'plan', 'report']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
+const STAFF_TABS = ['roster', 'register', 'staff', 'account'];
+const roleOf = () => state.user?.role || 'learner';
+function tabOk(tab) { // 가입한 서비스(학습관리/진로컨설팅)에 따라 탭을 숨김
+  const sv = state.profile?.services || {};
+  if (['study', 'plan', 'quiz'].includes(tab)) return sv.study !== false;
+  if (['explore', 'tests'].includes(tab)) return sv.career !== false;
+  return true;
+}
+function tabsNow() {
+  if (state.viewAs) return state.ro ? ['report'] : STUDENT_VIEW_TABS.filter(tabOk);
+  const role = roleOf();
+  if (role === 'guardian') return GUARDIAN_TABS;
+  if (role === 'teacher') return STAFF_TABS.filter((k) => k !== 'staff');
+  if (role === 'admin') return STAFF_TABS;
+  return LEARNER_TABS.filter(tabOk);
+}
+const RENDERERS = () => ({ home: renderHome, explore: renderExplore, tests: renderTests, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
   document.documentElement.lang = lang; document.title = t('title'); $('#title').textContent = '🧭 ' + t('title');
-  const guardian = state.user?.role === 'guardian';
-  document.body.classList.toggle('kid', !guardian && state.profile?.group === 'elementary');
-  const tabs = guardian ? GUARDIAN_TABS : LEARNER_TABS;
-  if (guardian && !tabs.includes(state.tab)) state.tab = 'dash';
-  const onboarding = !guardian && !state.profile;
+  const role = roleOf(), staffLike = ['guardian', 'teacher', 'admin'].includes(role);
+  document.body.classList.toggle('kid', !!state.profile && state.profile.group === 'elementary' && (!staffLike || !!state.viewAs));
+  const onboarding = !state.user && !state.profile;
+  const tabs = onboarding ? [] : tabsNow();
+  if (!onboarding && !tabs.includes(state.tab)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${t('tab_' + k)}</button>`).join('');
-  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); }));
+  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); scrollTo(0, 0); }));
   if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
-  ({ home: renderHome, explore: renderExplore, tests: renderTests, study: renderStudy, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash }[state.tab] || renderHome)(app);
+  (RENDERERS()[state.tab] || renderHome)(app);
+  if (state.viewAs) { // 학생을 열어 본 상태의 안내 줄
+    app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}</div>`);
+    $('#backlist').onclick = closeStudent;
+  }
 }
 
 function renderOnboarding(app) {
@@ -114,36 +171,46 @@ function renderOnboarding(app) {
     <label>${t('onb_iam')}<select id="group">${Object.keys(GROUPS).map((k) => `<option value="${k}">${groupLabel(k)}</option>`).join('')}</select></label><br><br>
     <button class="primary" id="start">${t('onb_start')}</button>
     <p class="sub">${t('onb_local_note')}</p>
-    <p>${t('onb_have_account')} <button id="tologin">${t('onb_login_signup')}</button></p></div>`;
-  $('#tologin').onclick = () => { state.tab = 'account'; render(); };
+    ${PREVIEW ? '' : `<p>${t('onb_have_account')} <button id="tologin">${t('onb_login_signup')}</button></p>`}</div>`;
+  if (!PREVIEW) $('#tologin').onclick = () => { state.tab = 'account'; render(); };
   $('#start').onclick = () => {
-    state.profile = { name: $('#name').value.trim() || t('friend'), group: $('#group').value };
+    state.profile = { name: $('#name').value.trim() || t('friend'), group: $('#group').value, services: { study: true, career: true }, school: '', note: '', teacherNote: '' };
     save('profile'); render();
   };
 }
 
+// ---- 홈 ----
 function renderHome(app) {
   const g = state.profile.group;
   const done = answered() === Q().length;
-  const open = state.tasks.filter((t) => !t.done).length;
+  const open = state.tasks.filter((x) => !x.done).length;
   const mins = state.log[today()] || 0;
+  const n = ddayOf(state.goal.date), ci = state.checkins.find((c) => c.date === today());
+  const wd = (new Date().getDay() + 6) % 7, todays = state.schedule.filter((b) => b.day === wd).sort((a, b) => a.start - b.start);
+  const cells = state.weekplan.length * 7, green = state.weekplan.reduce((a, r) => a + r.days.filter((x) => x === 'green').length, 0);
+  const sv = state.profile.services || {};
   app.innerHTML = `
     <div class="card"><h2>${esc(t('home_welcome', { name: state.profile.name }))} ${GROUPS[g].kid ? '🌟' : ''}</h2>
       <div class="stats"><div><b>${unit('unit_day', streak())}</b><span class="sub">${t('stat_streak')}</span></div><div><b>${unit('unit_min', mins)}</b><span class="sub">${t('stat_today')}</span></div><div><b>${unit('unit_count', open)}</b><span class="sub">${t('stat_open')}</span></div></div></div>
-    <div class="card"><h2>${t('explore_title')}</h2>${done
+    ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}
+    <div class="card"><h2>${t('ci_title')}</h2>${ci ? `<p>✅ ${t('ci_done', { time: esc(ci.time) })}</p>` : `<button class="primary" id="checkin">${t('ci_btn')}</button>`}<p class="sub">${t('rep_checkins', { n: checkinsThisWeek() })}</p></div>
+    ${sv.study !== false ? `<div class="card"><h2>${t('home_today_sched')}</h2>${todays.length ? todays.map((b) => `<div class="task"><span class="tag" style="background:${esc(b.color)};color:#fff">${hourLabel(b.start)}–${hourLabel(b.end)}</span><span>${esc(b.label)}</span></div>`).join('') : `<p class="sub">${t('home_no_sched')}</p>`}
+      ${cells ? `<p class="sub">${t('home_wp', { g: green, n: cells })}</p>` : ''}<button data-go="plan">${t('tab_plan')}</button></div>` : ''}
+    ${sv.career !== false ? `<div class="card"><h2>${t('explore_title')}</h2>${done
       ? `<p>${t('home_types')} ${topTypes().map((ty) => `<span class="tag">${R()[ty].name}</span>`).join('')}</p>`
       : `<p class="sub">${t('home_not_tested', { a: answered(), b: Q().length })}</p>`}
-      <button class="primary" data-go="explore">${done ? t('btn_result') : t('btn_test')}</button></div>
+      <button class="primary" data-go="explore">${done ? t('btn_result') : t('btn_test')}</button> <button data-go="tests">${t('tab_tests')}</button></div>` : ''}
     ${state.quiz.length ? `<div class="card"><h2>${t('recent_quiz')}</h2>${state.quiz.slice(-3).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(subjLabel(q.subject))} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}
-    <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>
-    <div class="card"><button data-go="study">${t('tab_study')}</button> <button data-go="quiz">${t('tab_quiz')}</button> <button data-go="coach">${t('btn_ai_consult')}</button> <button id="reset">${t('btn_reset')}</button></div>`;
+    <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    <div class="card">${['study', 'report', 'quiz', 'coach'].filter((k) => !state.viewAs || ['study', 'report'].includes(k)).filter(tabOk).map((k) => `<button data-go="${k}">${t('tab_' + k)}</button>`).join(' ')} ${state.viewAs ? '' : `<button id="reset">${t('btn_reset')}</button>`}</div>`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
-  $('#reset').onclick = () => { if (confirm(t('confirm_reset'))) {
-      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {}, tab: 'home' });
-      SYNC.forEach(save); render();
-    } };
+  if ($('#checkin')) $('#checkin').onclick = () => { const d = new Date(); state.checkins.push({ date: today(), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }); save('checkins'); render(); };
+  if ($('#reset')) $('#reset').onclick = () => {
+    if (confirm(t('confirm_reset'))) { SYNC.forEach((k) => { state[k] = clone(DEFAULTS[k]); save(k); }); state.tab = 'home'; render(); }
+  };
 }
 
+// ---- 진로탐색(간이 흥미검사) ----
 function renderExplore(app) {
   const kid = GROUPS[state.profile.group].kid;
   if (answered() < Q().length) {
@@ -160,19 +227,23 @@ function renderExplore(app) {
   app.innerHTML = `<div class="card"><h2>${t('res_title')}</h2>
     ${Object.keys(s).sort((a, b) => s[b] - s[a]).map((ty) => `<div class="row"><span style="width:120px">${R()[ty].name}</span><div class="bar" style="flex:1"><i style="width:${s[ty] / 10 * 100}%"></i></div><span>${s[ty]}/10</span></div>`).join('')}</div>
     ${top.map((ty) => `<div class="card"><h2>${R()[ty].name} (${ty})</h2><p>${R()[ty].desc}</p><p class="sub">${t('res_jobs')}</p>${C().careers[ty][kid ? 'kid' : 'std'].map((c) => `<span class="tag">${esc(c)}</span>`).join('')}</div>`).join('')}
-    <div class="card"><h2>${t('res_next')}</h2><ul>${C().next[state.profile.group].map((n) => `<li>${esc(n)}</li>`).join('')}</ul>
-    <button class="primary" data-go="coach">${t('btn_ask_coach')}</button> <button id="redo">${t('btn_redo')}</button></div>
+    <div class="card"><h2>${t('res_next')}</h2><ul>${C().next[state.profile.group].map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
+    ${state.viewAs ? '' : `<button class="primary" data-go="coach">${t('btn_ask_coach')}</button> `}<button data-go="tests">${t('comp_go')}</button> <button id="redo">${t('btn_redo')}</button></div>
     <p class="sub">${t('res_disclaimer')}</p>`;
-  $('[data-go]').onclick = () => { state.tab = 'coach'; render(); };
+  app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
   $('#redo').onclick = () => { state.answers = {}; save('answers'); render(); };
 }
 
+// ---- 학습관리 ----
 function renderStudy(app) {
   const week = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); const k = dk(d); return { day: C().days[d.getDay()], m: state.log[k] || 0 }; });
   const max = Math.max(60, ...week.map((w) => w.m));
+  const ts = state.tasks.filter((x) => x.done).length;
   app.innerHTML = `<div class="card"><h2>${t('study_tasks_title')}</h2>
       <div class="row"><input type="text" id="newtask" placeholder="${t('task_ph')}" maxlength="80"><button class="primary" id="add">${t('btn_add')}</button></div>
-      ${state.tasks.length ? state.tasks.map((t, i) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${esc(t.text)}</span><button data-del="${i}">✕</button></div>`).join('') : `<p class="sub">${t('task_empty')}</p>`}</div>
+      ${state.tasks.length ? state.tasks.map((x, i) => `<div class="task ${x.done ? 'done' : ''}"><input type="checkbox" data-i="${i}" ${x.done ? 'checked' : ''}><span>${esc(x.text)}</span><button data-del="${i}" aria-label="${t('btn_delete_item')}">✕</button></div>`).join('') : `<p class="sub">${t('task_empty')}</p>`}
+      ${state.tasks.length ? `<div class="row"><button id="closeout" ${ts ? '' : 'disabled'}>${t('co_btn')}</button><span class="sub">${t('co_hint', { d: ts, n: state.tasks.length })}</span></div>` : ''}
+      ${state.closeouts.length ? `<p class="sub">${t('co_history')}: ${state.closeouts.slice(-4).reverse().map((c) => `${esc(c.date)} ${c.done}/${c.total}`).join(' · ')}</p>` : ''}</div>
     <div class="card"><h2>${t('plan_title')}</h2>
       <p class="sub">${t('plan_desc')}</p>
       <input type="text" id="pgoal" maxlength="100" placeholder="${t('plan_goal_ph')}">
@@ -186,6 +257,10 @@ function renderStudy(app) {
   $('#add').onclick = addTask; $('#newtask').onkeydown = (e) => e.key === 'Enter' && addTask();
   app.querySelectorAll('[data-i]').forEach((c) => (c.onchange = () => { state.tasks[c.dataset.i].done = c.checked; save('tasks'); render(); }));
   app.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { state.tasks.splice(b.dataset.del, 1); save('tasks'); render(); }));
+  if ($('#closeout')) $('#closeout').onclick = () => { // 주간 마감: 완료 항목을 정리하고 기록을 남긴다
+    state.closeouts = [...state.closeouts, { date: today(), done: ts, total: state.tasks.length }].slice(-52); save('closeouts');
+    state.tasks = state.tasks.filter((x) => !x.done); save('tasks'); render();
+  };
   $('#pmake').onclick = async () => {
     const goal = $('#pgoal').value.trim(); if (!goal) { $('#pmsg').textContent = t('plan_need_goal'); return; }
     $('#pmake').disabled = true; $('#pmsg').textContent = t('plan_making');
@@ -210,6 +285,7 @@ function renderStudy(app) {
   };
 }
 
+// ---- AI 코치 ----
 function renderCoach(app) {
   app.innerHTML = `<div class="card"><h2>${t('coach_title')}</h2>
     <div class="chat" id="chat">${state.chat.length ? '' : `<div class="msg assistant">${esc(t('coach_hello', { name: state.profile.name }))}</div>`}
@@ -231,116 +307,12 @@ function renderCoach(app) {
   $('#clr').onclick = () => { state.chat = []; save('chat'); render(); };
 }
 
-// ---- 심층 검사 ----
-let tv = { mode: 'list', id: null, ans: [] }; // 목록 / 응시 / 결과
-const estMin = (n) => Math.max(2, Math.round(n * 10 / 60)); // 문항당 약 10초
-const scaleBar = (v) => `<div class="bar" style="flex:1"><i style="width:${v / 5 * 100}%"></i></div>`;
-
-function renderTests(app) {
-  if (GROUPS[state.profile.group].kid) { app.innerHTML = `<div class="card"><h2>${t('tests_title')}</h2><p>${t('tests_kid_note')}</p></div>`; return; }
-  if (tv.mode === 'take') return renderTake(app);
-  if (tv.mode === 'result' && state.deep[tv.id]?.length) return renderTestResult(app, tv.id);
-  tv = { mode: 'list', id: null, ans: [] };
-  app.innerHTML = `<div class="card"><h2>${t('tests_title')}</h2><p class="sub">${t('tests_intro')}</p></div>` + TESTS.map((test) => {
-    const T = tx(test.id), last = state.deep[test.id]?.at(-1);
-    return `<div class="card"><h2>${esc(T.name)}</h2><p class="sub">${esc(T.intro)} · ${t('test_meta', { n: test.items.length, m: estMin(test.items.length) })}</p>
-      ${test.sensitive ? `<p class="sub">${esc(T.safety)}</p><p class="sub">${t('test_private')}</p>` : ''}
-      ${last ? `<p><b>${esc(describeTest(test.id, last).headline)}</b> <span class="sub">${t('test_last', { date: esc(last.date) })}</span></p>` : ''}
-      <button class="primary" data-start="${test.id}">${last ? t('btn_retest') : t('btn_start_test')}</button> ${last ? `<button data-view="${test.id}">${t('btn_view_result')}</button>` : ''}</div>`;
-  }).join('');
-  app.querySelectorAll('[data-start]').forEach((b) => (b.onclick = () => { tv = { mode: 'take', id: b.dataset.start, ans: [] }; render(); scrollTo(0, 0); }));
-  app.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => { tv = { mode: 'result', id: b.dataset.view, ans: [] }; render(); scrollTo(0, 0); }));
-}
-
-function renderTake(app) {
-  const test = testById(tv.id), T = tx(test.id), n = test.items.length;
-  const done = tv.ans.filter((v) => v !== undefined).length;
-  const item = (it, i) => {
-    if (test.perf) {
-      const q = T.items[i];
-      return `<div class="titem"><b>${i + 1}.</b> ${q.context ? `<div class="ctx">${esc(q.context)}</div>` : ''}<div class="qtext">${esc(q.prompt)}</div>
-        ${q.choices.map((c, k) => `<button class="choice ${tv.ans[i] === k ? 'on' : ''}" data-i="${i}" data-v="${k}">${'①②③④'[k]} ${esc(c)}</button>`).join('')}</div>`;
-    }
-    return `<div class="titem"><b>${i + 1}.</b> ${esc(T.items[i])}<div class="scale">${[1, 2, 3, 4, 5].map((v) => `<button data-i="${i}" data-v="${v}" class="${tv.ans[i] === v ? 'on' : ''}">${t('lk' + v)}</button>`).join('')}</div></div>`;
-  };
-  app.innerHTML = `<div class="card"><h2>${esc(T.name)}</h2><p class="sub">${t('test_progress', { a: done, b: n })}</p><div class="bar"><i style="width:${done / n * 100}%"></i></div>
-    ${test.sensitive ? `<p class="sub" style="margin-top:12px">${esc(T.safety)}</p>` : ''}
-    <div style="margin-top:14px">${test.items.map(item).join('')}</div>
-    <button class="primary" id="finish" ${done < n ? 'disabled' : ''}>${t('btn_finish_test')}</button> <button id="cancel">${t('btn_cancel')}</button></div>`;
-  app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { tv.ans[+b.dataset.i] = +b.dataset.v; const y = scrollY; render(); scrollTo(0, y); }));
-  $('#cancel').onclick = () => { tv = { mode: 'list', id: null, ans: [] }; render(); };
-  $('#finish').onclick = () => {
-    const r = scoreTest(test, tv.ans);
-    const rec = { date: today(), cat: r.cat, overall: r.overall, v: validityOf(test, tv.ans) };
-    state.deep[test.id] = [...(state.deep[test.id] || []), rec].slice(-5); save('deep');
-    tv = { mode: 'result', id: test.id, ans: [] }; render(); scrollTo(0, 0);
-  };
-}
-
-function renderTestResult(app, id) {
-  const test = testById(id), T = tx(id), hist = state.deep[id], cur = hist.at(-1), prev = hist.at(-2);
-  const d = describeTest(id, cur);
-  const how = id === 'aptitude' ? t('res_how_apt') : id === 'wellbeing' ? t('res_how_wb') : t('res_how');
-  const delta = (k) => { if (!prev) return ''; const x = Math.round((cur.cat[k] - prev.cat[k]) * 10) / 10; return x === 0 ? '' : ` <span class="sub">${x > 0 ? '▲' : '▼'}${Math.abs(x).toFixed(1)}</span>`; };
-  app.innerHTML = `<div class="card"><h2>${esc(T.name)}</h2><p style="font-size:1.15em"><b>${esc(d.headline)}</b></p>
-      <p>${d.tags.map(([l, c]) => `<span class="tag ${c}">${esc(l)}</span>`).join('')}</p>
-      ${radarSvg(test.cats.map((k) => ({ label: testLabel(id, k), short: shortLabel(id, k), value: cur.cat[k] })))}
-      ${test.cats.map((k) => `<div class="row"><span style="width:130px">${esc(testLabel(id, k))}</span>${scaleBar(cur.cat[k])}<span style="width:70px;text-align:right">${cur.cat[k].toFixed(1)}${delta(k)}</span></div>`).join('')}
-      <p class="sub">${prev ? t('res_prev', { date: esc(prev.date) }) : t('res_first')}</p><p class="sub">${how}</p></div>
-    ${cur.v?.length ? `<div class="card callout warn"><h2>⚠ ${t('valid_title')}</h2><p>${t('valid_body')}</p><ul>${cur.v.map((c) => `<li>${t('valid_' + c)}</li>`).join('')}</ul></div>` : ''}
-    ${d.attention ? `<div class="card callout"><h2>💬 ${t('wb_title')}</h2><p>${t('wb_body')}</p><p><b>${t('wb_help')}</b></p><p class="sub">${esc(T.safety)}</p></div>` : ''}
-    ${test.sensitive ? `<p class="sub">${t('test_private')}</p>` : ''}
-    <div class="card"><button class="primary" data-start="${id}">${t('btn_retest')}</button> <button id="back">${t('btn_to_list')}</button></div>`;
-  $('[data-start]').onclick = () => { tv = { mode: 'take', id, ans: [] }; render(); scrollTo(0, 0); };
-  $('#back').onclick = () => { tv = { mode: 'list', id: null, ans: [] }; render(); };
-}
-
-// ---- 퀴즈 ----
-let qz = null; // { subject, questions, i, picked, score, done, review }
-function renderQuiz(app) {
-  if (qz && !qz.done) {
-    const q = qz.questions[qz.i], answered = qz.picked !== null;
-    app.innerHTML = `<div class="card"><h2>${esc(t('quiz_q_title', { subject: subjLabel(qz.subject), i: qz.i + 1, n: qz.questions.length }))}</h2><p><b>${esc(q.q)}</b></p>
-      ${q.choices.map((c, k) => `<button data-k="${k}" style="display:block;width:100%;text-align:left;margin:6px 0;${answered && k === q.answer ? 'border-color:var(--ok);background:var(--main2)' : ''}" ${answered ? 'disabled' : ''}>${'①②③④'[k]} ${esc(c)}${answered && k === qz.picked ? (k === q.answer ? ' ✅' : ' ❌') : ''}</button>`).join('')}
-      ${answered ? `<p>${qz.picked === q.answer ? t('quiz_ok') : t('quiz_no', { c: '①②③④'[q.answer] })}</p><p class="sub">${esc(q.explain)}</p><button class="primary" id="next">${qz.i + 1 < qz.questions.length ? t('btn_next') : t('btn_result')}</button>` : ''}</div>`;
-    app.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => {
-      qz.picked = +b.dataset.k;
-      const same = (w) => w.q === q.q;
-      if (qz.picked === q.answer) { qz.score++; if (qz.review) { state.wrong = state.wrong.filter((w) => !same(w)); save('wrong'); } } // 복습에서 맞히면 목록에서 제거
-      else if (!state.wrong.some(same)) { state.wrong.push({ subject: qz.subject, q: q.q, choices: q.choices, answer: q.answer, explain: q.explain }); save('wrong'); }
-      render();
-    }));
-    if (answered) $('#next').onclick = () => {
-      if (qz.i + 1 < qz.questions.length) { qz.i++; qz.picked = null; } else {
-        qz.done = true; state.quiz.push({ date: today(), subject: qz.review ? REVIEW : qz.subject, score: qz.score, total: qz.questions.length }); save('quiz');
-      }
-      render();
-    };
-    return;
-  }
-  const done = qz?.done ? `<div class="card"><h2>${t('quiz_result', { s: qz.score, n: qz.questions.length })}</h2><p>${qz.score === qz.questions.length ? t('quiz_perfect') : qz.score >= qz.questions.length / 2 ? t('quiz_good') : t('quiz_try')}</p></div>` : '';
-  app.innerHTML = `${done}<div class="card"><h2>${t('quiz_ai_title')}</h2><p class="sub">${t('quiz_desc', { level: levelLabel(state.profile.group) })}</p>
-    <input type="text" id="subj" maxlength="40" placeholder="${t('quiz_subj_ph')}">
-    <div class="row"><select id="cnt"><option>3</option><option selected>5</option><option>10</option></select><span class="sub">${t('q_unit')}</span><button class="primary" id="go">${t('btn_quiz_start')}</button></div><p class="sub" id="qmsg"></p></div>
-    ${state.wrong.length ? `<div class="card"><h2>${t('review_title')}</h2><p class="sub">${t('review_desc', { n: state.wrong.length })}</p><button id="review">${t('btn_review')}</button></div>` : ''}
-    ${state.quiz.length ? `<div class="card"><h2>${t('quiz_history')}</h2>${state.quiz.slice(-8).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(subjLabel(q.subject))} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}`;
-  if ($('#review')) $('#review').onclick = () => { qz = { subject: REVIEW, questions: state.wrong.slice(0, 5), i: 0, picked: null, score: 0, done: false, review: true }; render(); };
-  $('#go').onclick = async () => {
-    const subject = $('#subj').value.trim(); if (!subject) { $('#qmsg').textContent = t('quiz_need_subj'); return; }
-    $('#go').disabled = true; $('#qmsg').textContent = t('quiz_making');
-    try {
-      const r = await api('/api/quiz', { method: 'POST', body: { subject, count: +$('#cnt').value, group: state.profile.group } });
-      qz = { subject, questions: r.questions, i: 0, picked: null, score: 0, done: false }; render();
-    } catch (e) { $('#qmsg').textContent = e.message; $('#go').disabled = false; }
-  };
-}
-
 // ---- 계정 ----
 function renderAccount(app) {
   if (state.user) {
-    const learner = state.user.role === 'learner';
-    app.innerHTML = `<div class="card"><h2>${esc(t('acc_hello', { name: state.user.name, role: learner ? t('role_learner') : t('role_guardian') }))}</h2>
-      <p class="sub">${learner ? t('acc_sync_desc') : t('acc_guardian_desc')}</p><button id="logout">${t('btn_logout')}</button></div>
+    const role = state.user.role, learner = role === 'learner';
+    app.innerHTML = `<div class="card"><h2>${esc(t('acc_hello', { name: state.user.name, role: t('role_' + role) }))}</h2>
+      <p class="sub">${learner ? t('acc_sync_desc') : role === 'guardian' ? t('acc_guardian_desc') : t('acc_staff_desc')}</p><button id="logout">${t('btn_logout')}</button></div>
       <div class="card"><h2>${t('acc_manage')}</h2>
         <div class="row"><input type="password" id="pwcur" placeholder="${t('pw_cur')}" autocomplete="current-password"></div>
         <div class="row"><input type="password" id="pwnew" placeholder="${t('pw_new')}" autocomplete="new-password"><button id="pwchg">${t('btn_change')}</button></div>
@@ -348,9 +320,13 @@ function renderAccount(app) {
         <p class="sub" id="accmsg">${t('acc_note')}</p></div>
       ${learner ? `<div class="card"><h2>${t('link_title')}</h2><p>${t('link_code')}: <b style="font-size:1.3em;letter-spacing:2px">${esc(state.user.shareCode)}</b></p>
         <p class="sub">${t('link_desc')}</p>
-        <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>` : ''}`;
-    $('#logout').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch {} state.token = null; state.user = null; store.set('token', null); state.tab = 'home'; render(); };
-    const msg = (t) => { $('#accmsg').textContent = t; };
+        <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>
+        <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><p class="sub">${t('consent_note')}</p></div>` : ''}`;
+    $('#logout').onclick = async () => {
+      await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
+      state.token = null; state.user = null; state.viewAs = null; state.ro = false; store.set('token', null); dirty.clear(); clearLocal(); state.tab = 'home'; render(); // 공용 기기에 학습 데이터가 남지 않도록 로컬 사본을 지운다
+    };
+    const msg = (m) => { $('#accmsg').textContent = m; };
     $('#pwchg').onclick = async () => {
       try { const r = await api('/api/password', { method: 'POST', body: { current: $('#pwcur').value, next: $('#pwnew').value } }); state.token = r.token; store.set('token', r.token); $('#pwcur').value = $('#pwnew').value = ''; msg(t('pw_changed')); } catch (e) { msg(e.message); }
     };
@@ -366,11 +342,12 @@ function renderAccount(app) {
       if (!pw) return;
       try {
         await api('/api/delete-account', { method: 'POST', body: { password: pw } });
-        localStorage.clear(); Object.assign(state, { token: null, user: null, profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {}, tab: 'home' }); render();
+        localStorage.clear(); state.token = null; state.user = null; dirty.clear(); loadData({}); state.tab = 'home'; render();
       } catch (e) { msg(e.message); }
     };
     if (learner) {
       $('#regen').onclick = async () => { state.user.shareCode = (await api('/api/regen-code', { method: 'POST' })).shareCode; render(); };
+      $('#consentwb').onchange = (e) => { state.consent = { wellbeing: e.target.checked }; save('consent'); };
       api('/api/guardians').then(({ guardians }) => {
         const el = $('#glist'); if (!el) return;
         el.innerHTML = guardians.length ? t('linked_to') + ' ' + guardians.map((g) => `${esc(g.name)} <button data-u="${esc(g.id)}">${t('btn_unlink')}</button>`).join(' ') : t('no_guardians');
@@ -386,7 +363,10 @@ function renderAccount(app) {
       <div class="row"><input type="password" id="spw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div>
       <div class="row"><select id="srole"><option value="learner">${t('role_opt_learner')}</option><option value="guardian">${t('role_opt_guardian')}</option></select></div>
       <button class="primary" id="signup">${t('btn_signup')}</button>
-      <p class="sub">${t('minor_note')}</p></div><p class="sub" id="amsg"></p>`;
+      <p class="sub">${t('minor_note')}</p></div>
+    <div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
+      <input type="text" id="ccode" maxlength="8" placeholder="${t('claim_code_ph')}"><div class="row"><input type="text" id="cemail" placeholder="${t('email_ph')}"></div>
+      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="claim">${t('claim_btn')}</button></div><p class="sub" id="amsg"></p>`;
   if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; render(); };
   const go = (path, body) => async () => {
     $('#amsg').textContent = t('processing');
@@ -394,35 +374,5 @@ function renderAccount(app) {
   };
   $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
   $('#signup').onclick = go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value }));
+  $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
 }
-
-// ---- 보호자/교사 대시보드 ----
-function renderDash(app) {
-  app.innerHTML = `<div class="card"><h2>${t('dash_link_title')}</h2><div class="row"><input type="text" id="code" maxlength="8" placeholder="${t('code_ph')}"><button class="primary" id="link">${t('btn_link')}</button></div><p class="sub" id="dmsg"></p></div><div id="learners">${t('loading')}</div>`;
-  $('#link').onclick = async () => {
-    try { const r = await api('/api/link', { method: 'POST', body: { code: $('#code').value } }); state.notice = t('linked_ok', { name: r.name }); render(); } catch (e) { $('#dmsg').textContent = e.message; }
-  };
-  if (state.notice) { $('#dmsg').textContent = state.notice; state.notice = null; }
-  api('/api/dashboard?today=' + today()).then(({ learners }) => {
-    const el = $('#learners'); if (!el) return;
-    if (!learners.length) { el.innerHTML = `<p class="sub">${t('dash_empty')}</p>`; return; }
-    el.innerHTML = learners.map((l) => {
-      const max = Math.max(60, ...l.week), days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return C().days[d.getDay()]; });
-      const avg = l.quiz.length ? Math.round(l.quiz.reduce((a, q) => a + q.score / q.total, 0) / l.quiz.length * 100) : null;
-      return `<div class="card"><h2>${esc(l.name)} <span class="sub">${esc(l.group ? groupLabel(l.group) : '')}</span> <button data-u="${esc(l.id)}" style="float:right">${t('btn_unlink')}</button></h2>
-        <div class="stats"><div><b>${unit('unit_day', l.streak)}</b><span class="sub">${t('stat_streak')}</span></div><div><b>${unit('unit_min', l.today)}</b><span class="sub">${t('today_short')}</span></div><div><b>${unit('unit_min', l.week.reduce((a, b) => a + b, 0))}</b><span class="sub">${t('last7')}</span></div></div>
-        <div class="week" style="margin-top:12px">${l.week.map((m, i) => `<div><i style="height:${m / max * 80}px"></i>${days[i]}<br>${m}</div>`).join('')}</div>
-        <p>${t('goals_line', { d: l.doneCount, o: l.openCount })}</p>${l.openTasks.length ? `<ul>${l.openTasks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
-        <p>${t('riasec_line')} ${l.riasec.length ? l.riasec.map((ty) => `<span class="tag">${esc(R()[ty].name)}</span>`).join('') : `<span class="sub">${t('not_tested')}</span>`}</p>
-        <p>${t('deep_title')}: ${Object.keys(l.deep || {}).length ? Object.entries(l.deep).map(([id, r]) => `<span class="tag">${esc(tx(id).name)} · ${esc(describeTest(id, r).headline)}</span>`).join('') : `<span class="sub">${t('deep_none')}</span>`}</p>
-        <p>${t('quiz_avg')} ${avg === null ? `<span class="sub">${t('no_record')}</span>` : unit('score_pt', avg)}</p></div>`;
-    }).join('');
-    el.querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { if (confirm(t('confirm_unlink'))) { await api('/api/unlink', { method: 'POST', body: { id: b.dataset.u } }); render(); } }));
-  }).catch((e) => { const el = $('#learners'); if (el) el.textContent = e.message; });
-}
-
-const langSel = $('#lang');
-langSel.innerHTML = Object.entries(LANGS).map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
-langSel.value = lang;
-langSel.onchange = () => { setLang(langSel.value); render(); };
-boot();

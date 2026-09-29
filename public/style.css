@@ -5,7 +5,8 @@ body { margin:0; font-family:-apple-system,"Noto Sans KR","Malgun Gothic",sans-s
 body.kid { font-size:19px; }
 header { display:flex; flex-wrap:wrap; align-items:center; gap:8px 20px; padding:12px 16px; background:var(--card); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; }
 h1 { font-size:1.2rem; margin:0; }
-nav { display:flex; gap:6px; flex-wrap:wrap; }
+nav { display:flex; gap:6px; flex-wrap:nowrap; overflow-x:auto; scrollbar-width:thin; }
+nav button { white-space:nowrap; flex:none; }
 button { font:inherit; cursor:pointer; border:1px solid var(--line); background:var(--card); color:var(--ink); padding:8px 14px; border-radius:10px; }
 button.primary, nav button.on { background:var(--main); color:#fff; border-color:var(--main); }
 button:disabled { opacity:.5; cursor:default; }
@@ -51,3 +52,58 @@ header nav { flex-basis:100%; }
 .choice.on { background:var(--main); color:#fff; border-color:var(--main); }
 .callout { border-color:var(--main); background:var(--main2); }
 .callout.warn { border-color:#e0a030; }
+
+/* ---- 서브탭·공통 ---- */
+.subnav { display:flex; gap:6px; margin-bottom:12px; overflow-x:auto; }
+.subnav button { flex:none; white-space:nowrap; }
+.subnav button.on { background:var(--main); color:#fff; border-color:var(--main); }
+.tscroll { overflow-x:auto; }
+.viewas { display:flex; flex-wrap:wrap; align-items:center; gap:8px; background:var(--main2); border:1px solid var(--line); border-radius:12px; padding:8px 12px; margin-bottom:12px; }
+.pill { display:inline-block; padding:2px 10px; border-radius:20px; font-size:.85em; font-weight:700; }
+.pill.ok { background:#dcf5e6; color:#156a3c; } .pill.watch { background:#fdecc8; color:#7a4a00; }
+@media (prefers-color-scheme: dark) { .pill.ok { background:#12331f; color:#7fe0a5; } .pill.watch { background:#4a3510; color:#ffd88a; } }
+.dday { display:flex; align-items:center; gap:14px; }
+.dday b { font-size:1.9rem; color:var(--main); } .dday span { color:var(--sub); }
+table.wplan { width:100%; border-collapse:collapse; font-size:.92em; }
+table.wplan th { text-align:left; color:var(--sub); font-weight:700; padding:0 6px 8px; white-space:nowrap; }
+table.wplan td { padding:8px 6px; border-top:1px solid var(--line); vertical-align:middle; }
+table.wplan td.subj { font-weight:700; } table.wplan td.detail, table.wplan td.kind { color:var(--sub); }
+.legend { display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin:6px 0 10px; color:var(--sub); font-size:.9em; }
+.lg { display:inline-block; width:14px; height:14px; border-radius:4px; vertical-align:-2px; margin-right:4px; }
+.lg.green, .daycell.green { background:#22a06b; border-color:#22a06b; } .lg.yellow, .daycell.yellow { background:#e0a030; border-color:#e0a030; } .lg.red, .daycell.red { background:#d64545; border-color:#d64545; }
+.daycell { width:30px; height:24px; padding:0; border-radius:7px; border:1.5px solid var(--line); background:var(--bg); display:block; margin:0 auto; }
+.daycell:disabled { cursor:default; }
+.swatches { display:flex; gap:8px; flex-wrap:wrap; margin:8px 0; }
+.swatch { width:26px; height:26px; padding:0; border-radius:8px; border:2px solid transparent; }
+.swatch.on { border-color:var(--ink); }
+/* ---- 시간표 ---- */
+.sgwrap { overflow-x:auto; }
+.sgrid { display:grid; grid-template-columns:44px repeat(7,minmax(46px,1fr)); min-width:380px; position:relative; user-select:none; -webkit-user-select:none; }
+.sgrid .dayhead { text-align:center; font-weight:700; font-size:.85em; color:var(--sub); padding-bottom:4px; }
+.sgrid .hourlbl { font-size:.7em; color:var(--sub); text-align:right; padding-right:6px; align-self:start; }
+.sgcell { border-top:1px solid var(--line); border-left:1px solid var(--line); cursor:pointer; }
+.sgcell:hover { background:var(--main2); }
+.sgblock { margin:1px 2px; border-radius:6px; padding:2px 5px; color:#fff; font-size:.72em; font-weight:700; overflow:hidden; cursor:pointer; z-index:1; line-height:1.25; }
+.sgghost { margin:1px 2px; border-radius:6px; background:var(--main); opacity:.4; pointer-events:none; z-index:2; }
+.sg-panel { margin-top:12px; padding:12px; border:1px solid var(--line); border-radius:12px; background:var(--bg); display:flex; flex-direction:column; gap:8px; }
+/* ---- 문서(학부모 리포트·진단서) ---- */
+.doc { background:var(--card); border:1px solid var(--line); border-radius:14px; overflow:hidden; margin-bottom:14px; }
+.letterhead { display:flex; flex-wrap:wrap; justify-content:space-between; gap:10px; padding:16px 18px; border-bottom:2px solid var(--main); background:var(--main2); }
+.letterhead .org { font-weight:800; color:var(--main); } .lh-title { font-size:1.25rem; font-weight:800; margin-top:6px; }
+.lh-meta { font-size:.82em; color:var(--sub); line-height:1.8; } .lh-meta b { color:var(--ink); }
+.docsec { padding:14px 18px; border-bottom:1px solid var(--line); } .docsec h3 { margin:0 0 8px; font-size:1rem; color:var(--main); }
+.docfoot { padding:14px 18px; background:var(--bg); }
+.statgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr)); gap:8px; margin-bottom:10px; }
+.statgrid > div { background:var(--bg); border-radius:10px; padding:8px 10px; text-align:center; } .statgrid b { display:block; font-size:1.3rem; color:var(--main); } .statgrid span { font-size:.78em; color:var(--sub); }
+table.rtbl { width:100%; border-collapse:collapse; font-size:.92em; } table.rtbl td { border:1px solid var(--line); padding:7px 10px; vertical-align:top; line-height:1.55; } table.rtbl td.k { background:var(--bg); font-weight:700; width:32%; }
+.sign { display:flex; gap:24px; margin-bottom:10px; } .sign > div { flex:1; font-size:.85em; color:var(--sub); } .sign span { display:block; border-bottom:1px solid var(--ink); height:34px; }
+textarea { font:inherit; width:100%; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink); resize:vertical; }
+input[type=date] { font:inherit; padding:8px 10px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--ink); }
+/* ---- 인쇄 ---- */
+@media print {
+  header, nav, .noprint, .subnav, .viewas { display:none !important; }
+  body { background:#fff; color:#000; font-size:12pt; } main { max-width:none; padding:0; }
+  .doc { border:0; border-radius:0; } .docsec { break-inside:avoid; page-break-inside:avoid; }
+  .letterhead { background:#fff; border-bottom:2px solid #000; } .letterhead .org, .docsec h3, .statgrid b { color:#000; }
+  .card { border:0; } button { display:none !important; }
+}

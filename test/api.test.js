@@ -85,7 +85,7 @@ test('비밀번호 변경·내보내기·계정 삭제·보안 헤더', async ()
   const a = await post('/api/signup', { email: 'del@b.co', password: 'password1', name: '삭제' });
   const g = await post('/api/signup', { email: 'g2@b.co', password: 'password1', name: '보호자', role: 'guardian' });
   await post('/api/link', { code: a.user.shareCode }, g.token);
-  await post('/api/data', { data: { tasks: [{ text: 'x', done: false }], wrong: [{ q: 'q' }] } }, a.token, 'PUT');
+  await post('/api/data', { data: { tasks: [{ text: 'x', done: false }], wrong: [{ q: 'q', choices: ['a', 'b', 'c', 'd'], answer: 1, explain: 'e' }] } }, a.token, 'PUT');
   assert.equal((await post('/api/password', { current: 'nope', next: 'newpassword1' }, a.token)).status, 401);
   assert.equal((await post('/api/password', { current: 'password1', next: 'short' }, a.token)).status, 400);
   const c = await post('/api/password', { current: 'password1', next: 'newpassword1' }, a.token);

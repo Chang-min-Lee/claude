@@ -9,7 +9,7 @@ const setLang = (l) => { lang = l; try { localStorage.setItem('lang', l); } catc
 
 const UI = {
   ko: {
-    tab_tests: '심층검사', tests_title: '심층 검사', tests_intro: '검사 결과는 나를 이해하는 참고 자료예요. 정답이나 좋고 나쁨이 없으니 편하게, 한 번에 하나씩 해 보세요.',
+    tab_tests: '검사', tests_title: '심층 검사', tests_intro: '검사 결과는 나를 이해하는 참고 자료예요. 정답이나 좋고 나쁨이 없으니 편하게, 한 번에 하나씩 해 보세요.',
     tests_kid_note: '심층 검사는 중학생 이상부터 이용할 수 있어요. 지금은 진로탐색 탭의 흥미 검사를 해 보세요!', test_meta: '{n}문항 · 약 {m}분', test_last: '최근 결과 ({date})',
     btn_start_test: '시작', btn_retest: '다시 검사', btn_view_result: '결과 보기', test_progress: '{a} / {b} 응답', btn_finish_test: '결과 보기', btn_cancel: '그만두기', btn_to_list: '검사 목록',
     test_private: '이 검사 결과는 나만 볼 수 있어요. 보호자·교사에게 공유되지 않아요.',
@@ -51,7 +51,7 @@ const UI = {
     goals_line: '목표: 완료 {d}개 · 진행 중 {o}개', riasec_line: '흥미 유형:', not_tested: '검사 전', quiz_avg: '퀴즈 평균:', no_record: '기록 없음', score_pt: '{n}점', last7: '최근 7일', today_short: '오늘', confirm_unlink: '연결을 해제할까요?', req_failed: '요청에 실패했어요.',
   },
   vi: {
-    tab_tests: 'Kiểm tra chuyên sâu', tests_title: 'Kiểm tra chuyên sâu', tests_intro: 'Kết quả chỉ là tài liệu tham khảo để hiểu bản thân. Không có đáp án đúng sai, hãy làm thoải mái, mỗi lần một bài.',
+    tab_tests: 'Kiểm tra', tests_title: 'Kiểm tra chuyên sâu', tests_intro: 'Kết quả chỉ là tài liệu tham khảo để hiểu bản thân. Không có đáp án đúng sai, hãy làm thoải mái, mỗi lần một bài.',
     tests_kid_note: 'Kiểm tra chuyên sâu dành cho học sinh THCS trở lên. Bây giờ em hãy làm bài trắc nghiệm sở thích ở tab Hướng nghiệp nhé!', test_meta: '{n} câu · khoảng {m} phút', test_last: 'Kết quả gần nhất ({date})',
     btn_start_test: 'Bắt đầu', btn_retest: 'Làm lại', btn_view_result: 'Xem kết quả', test_progress: 'Đã trả lời {a} / {b}', btn_finish_test: 'Xem kết quả', btn_cancel: 'Dừng lại', btn_to_list: 'Danh sách bài',
     test_private: 'Kết quả này chỉ mình bạn xem được. Không chia sẻ cho phụ huynh/giáo viên.',

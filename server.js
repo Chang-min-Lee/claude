@@ -11,10 +11,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const SYNC_KEYS = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong', 'deep'];
-// 심층검사 id별 영역 키(구조 검증용). wellbeing(정서웰빙)은 민감 정보라 보호자/교사 요약에서 제외한다.
-const DEEP_CATS = { bigfive: 'OCEAN', workvalues: ['growth', 'stability', 'reward', 'autonomy', 'recognition', 'fun'], aptitude: ['lang', 'math', 'spatial', 'social', 'logic', 'creative'], sdl: ['plan', 'monitor', 'goal', 'persist'], wellbeing: ['stable', 'energy', 'relation', 'stress'] };
-const SHARED_DEEP = ['bigfive', 'workvalues', 'aptitude', 'sdl'];
+const { sanitizers, sanitizeData, DATA_KEYS, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -25,25 +22,6 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let db = { users: {}, sessions: {} };
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch {}
-// 심층검사 기록 검증: 알려진 검사/영역만, 점수는 1~5 범위 숫자, 검사당 최근 5건
-function sanitizeDeep(d) {
-  const out = {};
-  if (!d || typeof d !== 'object') return out;
-  for (const [id, cats] of Object.entries(DEEP_CATS)) {
-    if (!Array.isArray(d[id])) continue;
-    const keys = Array.isArray(cats) ? cats : cats.split('');
-    const num = (v) => (Number.isFinite(+v) ? Math.min(5, Math.max(1, Math.round(+v * 10) / 10)) : null);
-    out[id] = d[id].slice(-5).map((r) => {
-      const cat = {};
-      for (const k of keys) { const v = num(r?.cat?.[k]); if (v === null) return null; cat[k] = v; }
-      const overall = num(r.overall);
-      if (overall === null) return null;
-      return { date: /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : '', cat, overall, v: (Array.isArray(r.v) ? r.v : []).filter((x) => ['same', 'run', 'flat'].includes(x)) };
-    }).filter(Boolean);
-  }
-  return out;
-}
-
 function persist() {
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db));
@@ -71,6 +49,8 @@ const M = {
     badEmail: '올바른 이메일을 입력해 주세요.', pwShort: '비밀번호는 8자 이상이어야 해요.', nameReq: '이름을 입력해 주세요.', emailTaken: '이미 가입된 이메일이에요.', badCred: '이메일 또는 비밀번호가 맞지 않아요.',
     learnerOnly: '학습자 계정만 저장할 수 있어요.', guardianOnlyLink: '보호자/교사 계정만 연결할 수 있어요.', codeNotFound: '연결 코드를 찾을 수 없어요.', guardianOnly: '보호자/교사 전용이에요.',
     curPwBad: '현재 비밀번호가 맞지 않아요.', newPwShort: '새 비밀번호는 8자 이상이어야 해요.', pwBad: '비밀번호가 맞지 않아요.', msgReq: '메시지가 필요합니다.', serverErr: '서버 오류가 발생했어요.',
+    diagNeedKey: 'AI 진단서는 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (아래의 기본 해석은 키 없이도 볼 수 있어요.)', forbidden: '접근 권한이 없어요.', notFound: '찾을 수 없어요.', staffOnly: '강사/관리자 전용이에요.', adminOnly: '관리자 전용이에요.',
+    lastAdmin: '마지막 남은 관리자 계정은 변경하거나 삭제할 수 없어요.', roleBad: '역할이 올바르지 않아요.', notManaged: '강사가 등록한 학생만 활성화할 수 있어요.', dataTooBig: '저장할 데이터가 너무 커요.', selfDelete: '내 계정은 여기서 삭제할 수 없어요. 계정 탭을 이용해 주세요.',
     noKeyChat: 'AI 코치를 쓰려면 서버에 ANTHROPIC_API_KEY 환경변수를 설정해 주세요. (진로검사·학습관리는 키 없이도 사용할 수 있어요.)',
   },
   vi: {
@@ -81,6 +61,8 @@ const M = {
     badEmail: 'Vui lòng nhập email hợp lệ.', pwShort: 'Mật khẩu phải có ít nhất 8 ký tự.', nameReq: 'Vui lòng nhập tên.', emailTaken: 'Email này đã được đăng ký.', badCred: 'Email hoặc mật khẩu không đúng.',
     learnerOnly: 'Chỉ tài khoản người học mới có thể lưu dữ liệu.', guardianOnlyLink: 'Chỉ tài khoản phụ huynh/giáo viên mới có thể kết nối.', codeNotFound: 'Không tìm thấy mã kết nối.', guardianOnly: 'Chỉ dành cho phụ huynh/giáo viên.',
     curPwBad: 'Mật khẩu hiện tại không đúng.', newPwShort: 'Mật khẩu mới phải có ít nhất 8 ký tự.', pwBad: 'Mật khẩu không đúng.', msgReq: 'Cần có tin nhắn.', serverErr: 'Đã xảy ra lỗi máy chủ.',
+    diagNeedKey: 'Bản chẩn đoán AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản bên dưới vẫn xem được khi không có khóa.)', forbidden: 'Bạn không có quyền truy cập.', notFound: 'Không tìm thấy.', staffOnly: 'Chỉ dành cho giáo viên/quản trị viên.', adminOnly: 'Chỉ dành cho quản trị viên.',
+    lastAdmin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', roleBad: 'Vai trò không hợp lệ.', notManaged: 'Chỉ học viên do giáo viên đăng ký mới có thể kích hoạt.', dataTooBig: 'Dữ liệu cần lưu quá lớn.', selfDelete: 'Không thể xóa tài khoản của chính bạn ở đây. Hãy dùng tab Tài khoản.',
     noKeyChat: 'Để dùng AI, hãy cài biến môi trường ANTHROPIC_API_KEY trên máy chủ. (Trắc nghiệm sở thích và quản lý học tập vẫn dùng được khi không có khóa.)',
   },
 };
@@ -119,7 +101,51 @@ function issueToken(userId) {
   persist();
   return token;
 }
-const publicUser = (u) => ({ id: u.id, name: u.name, role: u.role, shareCode: u.role === 'learner' ? u.shareCode : undefined });
+const publicUser = (u) => ({ id: u.id, name: u.name, role: u.role, shareCode: u.role === 'learner' ? u.shareCode : undefined, managed: u.role === 'learner' ? !u.email : undefined });
+
+// ---------- 역할·접근 제어 ----------
+// learner: 본인 / guardian: 연결된 학습자 읽기 전용 / teacher: 연결된(담당) 학습자 읽기·쓰기 / admin: 모든 학습자
+const isStaff = (u) => u.role === 'teacher' || u.role === 'admin';
+function canRead(actor, learner) {
+  if (!learner || learner.role !== 'learner') return false;
+  if (actor.id === learner.id || actor.role === 'admin') return true;
+  return (actor.role === 'teacher' || actor.role === 'guardian') && (actor.links || []).includes(learner.id);
+}
+const canWrite = (actor, learner) => !!learner && learner.role === 'learner' && (actor.id === learner.id || actor.role === 'admin' || (actor.role === 'teacher' && (actor.links || []).includes(learner.id)));
+function learnerOr404(actor, id, write = false) {
+  const l = db.users[id];
+  if (!l || l.role !== 'learner' || !(write ? canWrite(actor, l) : canRead(actor, l))) throw new HttpError(l ? 403 : 404, l ? 'forbidden' : 'notFound');
+  return l;
+}
+// 다른 사람이 볼 때의 데이터: 상담 대화는 절대 공개하지 않고, 정서웰빙은 본인 동의가 있을 때 강사/관리자에게만 공개한다.
+function dataFor(actor, learner) {
+  const d = { ...(learner.data || {}) };
+  if (actor.id === learner.id) return d;
+  delete d.chat;
+  const showWb = isStaff(actor) && !!d.consent?.wellbeing;
+  if (d.deep && !showWb) { d.deep = { ...d.deep }; delete d.deep.wellbeing; }
+  return d;
+}
+function assignTeacher(learnerId, teacherId) { // 한 학생은 한 명의 담당 강사
+  for (const o of Object.values(db.users)) if (o.role === 'teacher') o.links = (o.links || []).filter((x) => x !== learnerId);
+  const t = db.users[teacherId];
+  if (t && t.role === 'teacher' && !t.links.includes(learnerId)) t.links.push(learnerId);
+}
+const teacherOf = (learnerId) => Object.values(db.users).find((o) => o.role === 'teacher' && (o.links || []).includes(learnerId));
+const adminCount = () => Object.values(db.users).filter((u) => u.role === 'admin').length;
+function newUser(fields) { return { id: crypto.randomUUID(), data: {}, links: [], shareCode: newCode(), createdAt: Date.now(), ...fields }; }
+
+// 환경변수 ADMIN_EMAIL / ADMIN_PASSWORD 로 최초 관리자 계정을 만든다 (이미 있으면 역할만 관리자로 보장, 비밀번호는 바꾸지 않음)
+function bootstrapAdmin() {
+  const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase(), pw = String(process.env.ADMIN_PASSWORD || '');
+  if (!email || pw.length < 8) return;
+  const existing = userByEmail(email);
+  if (existing) { if (existing.role !== 'admin') { existing.role = 'admin'; persist(); } return; }
+  const salt = crypto.randomBytes(16).toString('hex');
+  const u = newUser({ email, name: '관리자', role: 'admin', salt, hash: hashPw(pw, salt) });
+  db.users[u.id] = u; persist();
+}
+bootstrapAdmin();
 
 // ---------- Claude ----------
 const STYLE = {
@@ -183,6 +209,8 @@ function extractJson(text) {
 const clampInt = (v, lo, hi, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 
+const aiMod = require('./lib/ai')({ callClaude, extractJson, HttpError });
+
 // ---------- 학습 계획 ----------
 const PLAN_STEPS = {
   ko: ['현재 수준 점검과 학습 자료 정하기', '핵심 개념 익히기', '문제/실습으로 적용하기', '틀린 부분 복습·정리하기', '실전 점검 및 다음 목표 세우기'],
@@ -235,7 +263,8 @@ async function makeQuiz(body, lang) {
 
 // ---------- 대시보드 요약 (보호자/교사에게는 요약만 공개, 상담 대화는 제외) ----------
 const dayKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-function summarize(u, todayStr) {
+const daysBetween = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
+function summarize(u, todayStr, viewer) {
   const d = u.data || {};
   const log = d.log || {};
   const [y, m, dd] = todayStr.split('-').map(Number);
@@ -249,12 +278,39 @@ function summarize(u, todayStr) {
   Object.entries(d.answers || {}).forEach(([i, v]) => { const t = 'RIASEC'[Math.floor(i / 2)]; if (t) sc[t] = (sc[t] || 0) + (+v || 0); });
   const top = Object.keys(d.answers || {}).length === 12 ? Object.keys(sc).sort((a, b) => sc[b] - sc[a]).slice(0, 2) : [];
   const tasks = d.tasks || [];
+  const deep = Object.fromEntries(SHARED_DEEP.filter((id) => d.deep?.[id]?.length).map((id) => [id, d.deep[id].at(-1)]));
+  const lastLog = Object.keys(log).filter((k) => log[k] > 0).sort().at(-1) || '';
+  const lastCheckin = (d.checkins || []).map((c) => c.date).sort().at(-1) || '';
+  const lastActive = [lastLog, lastCheckin].sort().at(-1) || '';
+  const monday = new Date(base); monday.setDate(monday.getDate() - ((base.getDay() + 6) % 7));
+  const checkinsWeek = (d.checkins || []).filter((c) => c.date >= dayKey(monday) && c.date <= todayStr).length;
+  const goal = d.goal || {};
+  const dday = goal.date ? daysBetween(todayStr, goal.date) : null;
+  const sdl = d.deep?.sdl?.at(-1)?.overall;
+  const idle = !u.createdAt || Date.now() - u.createdAt > 7 * 86400000 ? (!lastActive || daysBetween(lastActive, todayStr) >= 3) : false;
+  const validity = Object.values(deep).some((r) => r.v?.length);
+  const wb = d.deep?.wellbeing?.at(-1);
+  // 정서웰빙 '주의' 표시는 본인 동의가 있을 때 강사/관리자에게만 (보호자에게는 항상 숨김)
+  const wellbeing = !!(viewer && isStaff(viewer) && d.consent?.wellbeing && wb && wb.overall < 3.0);
+  const ddaySoon = dday !== null && dday >= 0 && dday <= 14;
+  const flags = { idle, validity, wellbeing, ddaySoon };
+  const t = teacherOf(u.id);
   return {
-    id: u.id, name: u.name, group: d.profile?.group || null, streak, week, today: week[6],
-    openTasks: tasks.filter((t) => !t.done).slice(0, 5).map((t) => t.text), doneCount: tasks.filter((t) => t.done).length, openCount: tasks.filter((t) => !t.done).length,
-    riasec: top, quiz: (d.quiz || []).slice(-5),
-    deep: Object.fromEntries(SHARED_DEEP.filter((id) => d.deep?.[id]?.length).map((id) => [id, d.deep[id].at(-1)])),
+    id: u.id, name: u.name, managed: !u.email, group: d.profile?.group || null, streak, week, today: week[6],
+    openTasks: tasks.filter((x) => !x.done).slice(0, 5).map((x) => x.text), doneCount: tasks.filter((x) => x.done).length, openCount: tasks.filter((x) => !x.done).length,
+    riasec: top, quiz: (d.quiz || []).slice(-5), deep,
+    teacher: t ? { id: t.id, name: t.name } : null, lastActive, checkinsWeek, goal: { type: goal.type || 'general', label: goal.label || '', dday },
+    intensity: sdl === undefined ? null : sdl >= 3.8 ? 'loose' : sdl >= 3.0 ? 'normal' : 'tight',
+    flags, status: idle || validity || wellbeing ? 'watch' : 'ok',
   };
+}
+
+function storeData(learner, clean) {
+  const merged = { ...learner.data, ...clean };
+  if (JSON.stringify(merged).length > MAX_DATA_BYTES) throw new HttpError(413, 'dataTooBig');
+  learner.data = merged;
+  if (clean.profile && !learner.email && clean.profile.name) learner.name = clean.profile.name; // 강사가 등록한 학생은 프로필 이름 = 계정 이름
+  persist();
 }
 
 // ---------- 라우터 ----------
@@ -270,7 +326,7 @@ const routes = {
     if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
     const role = b.role === 'guardian' ? 'guardian' : 'learner';
     const salt = crypto.randomBytes(16).toString('hex');
-    const u = { id: crypto.randomUUID(), email, name, role, salt, hash: hashPw(password, salt), data: {}, links: [], shareCode: newCode() };
+    const u = newUser({ email, name, role, salt, hash: hashPw(password, salt) });
     db.users[u.id] = u;
     return { token: issueToken(u.id), user: publicUser(u) };
   },
@@ -278,7 +334,7 @@ const routes = {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const b = await readBody(req);
     const u = userByEmail(str(b.email, 100).toLowerCase());
-    const ok = u && checkPw(u, b.password);
+    const ok = u && u.hash && checkPw(u, b.password);
     if (!ok) throw new HttpError(401, 'badCred');
     return { token: issueToken(u.id), user: publicUser(u) };
   },
@@ -292,14 +348,7 @@ const routes = {
     const u = needUser(req);
     if (u.role !== 'learner') throw new HttpError(403, 'learnerOnly');
     const b = await readBody(req);
-    const data = {};
-    for (const k of SYNC_KEYS) if (b.data && k in b.data) data[k] = b.data[k];
-    if (Array.isArray(data.chat)) data.chat = data.chat.slice(-50);
-    if (Array.isArray(data.quiz)) data.quiz = data.quiz.slice(-100);
-    if (Array.isArray(data.wrong)) data.wrong = data.wrong.slice(-50);
-    if ('deep' in data) data.deep = sanitizeDeep(data.deep);
-    u.data = { ...u.data, ...data };
-    persist();
+    storeData(u, sanitizeData(b.data));
     return { ok: true };
   },
   'POST /api/password': async (req) => {
@@ -316,6 +365,7 @@ const routes = {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const u = needUser(req);
     if (!checkPw(u, (await readBody(req)).password)) throw new HttpError(401, 'pwBad');
+    if (u.role === 'admin' && adminCount() <= 1) throw new HttpError(400, 'lastAdmin');
     dropSessions(u.id);
     delete db.users[u.id];
     for (const o of Object.values(db.users)) o.links = (o.links || []).filter((id) => id !== u.id); // 연결 정리
@@ -330,7 +380,7 @@ const routes = {
   'POST /api/link': async (req) => {
     limit('link:' + ip(req), 10, 15 * 60000);
     const u = needUser(req);
-    if (u.role !== 'guardian') throw new HttpError(403, 'guardianOnlyLink');
+    if (u.role !== 'guardian' && u.role !== 'teacher') throw new HttpError(403, 'guardianOnlyLink');
     const code = str((await readBody(req)).code, 8).toUpperCase();
     const learner = Object.values(db.users).find((x) => x.role === 'learner' && x.shareCode === code);
     if (!code || !learner) throw new HttpError(404, 'codeNotFound');
@@ -341,7 +391,7 @@ const routes = {
   'POST /api/unlink': async (req) => {
     const u = needUser(req);
     const id = str((await readBody(req)).id, 60);
-    if (u.role === 'guardian') u.links = u.links.filter((x) => x !== id);
+    if (u.role === 'guardian' || u.role === 'teacher') u.links = u.links.filter((x) => x !== id);
     else if (db.users[id]) db.users[id].links = db.users[id].links.filter((x) => x !== u.id); // 학습자가 보호자 연결을 끊음
     persist();
     return { ok: true };
@@ -352,9 +402,12 @@ const routes = {
   },
   'GET /api/dashboard': async (req, url) => {
     const u = needUser(req);
-    if (u.role !== 'guardian') throw new HttpError(403, 'guardianOnly');
-    const today = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : dayKey(new Date());
-    return { learners: u.links.map((id) => db.users[id]).filter(Boolean).map((l) => summarize(l, today)) };
+    if (u.role === 'learner') throw new HttpError(403, 'guardianOnly');
+    const today = isDate(url.searchParams.get('today')) ? url.searchParams.get('today') : dayKey(new Date());
+    const list = u.role === 'admin' ? Object.values(db.users).filter((x) => x.role === 'learner') : u.links.map((id) => db.users[id]).filter(Boolean);
+    const out = { learners: list.map((l) => summarize(l, today, u)) };
+    if (u.role === 'admin') out.teachers = Object.values(db.users).filter((x) => x.role === 'teacher').map((t) => ({ id: t.id, name: t.name }));
+    return out;
   },
   'POST /api/chat': async (req) => {
     limit('ai:' + ip(req), 30, 10 * 60000);
@@ -364,17 +417,147 @@ const routes = {
     const reply = await callClaude(systemPrompt(b.profile, langOf(req)), messages);
     return { reply: reply ?? M[langOf(req)].noKeyChat };
   },
+  // ---- 강사/관리자: 학생 등록·활성화 ----
+  'POST /api/students': async (req) => {
+    const u = needUser(req);
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const b = await readBody(req);
+    const name = clipStr(b.name, 20);
+    if (!name) throw new HttpError(400, 'nameReq');
+    const profile = sanitizers.profile({ name, group: b.group, services: b.services, school: b.school, note: b.note });
+    const goal = sanitizers.goal({ type: b.goalType, label: b.goalLabel, date: b.goalDate });
+    const l = newUser({ email: null, name, role: 'learner', managedBy: u.id, data: { profile, goal, consent: { wellbeing: true } } });
+    db.users[l.id] = l;
+    const tid = u.role === 'teacher' ? u.id : db.users[b.teacherId]?.role === 'teacher' ? b.teacherId : null;
+    if (tid) assignTeacher(l.id, tid);
+    persist();
+    return { id: l.id, shareCode: l.shareCode };
+  },
+  'POST /api/claim': async (req) => { // 강사가 등록한 학생이 본인 계정(이메일·비밀번호)을 만든다
+    limit('auth:' + ip(req), 20, 15 * 60000);
+    const b = await readBody(req);
+    const code = clipStr(b.code, 8).toUpperCase();
+    const l = code && Object.values(db.users).find((x) => x.role === 'learner' && x.shareCode === code);
+    if (!l) throw new HttpError(404, 'codeNotFound');
+    if (l.email) throw new HttpError(400, 'notManaged');
+    const email = clipStr(b.email, 100).toLowerCase(), password = String(b.password || '');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'badEmail');
+    if (password.length < 8) throw new HttpError(400, 'pwShort');
+    if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
+    l.email = email; l.salt = crypto.randomBytes(16).toString('hex'); l.hash = hashPw(password, l.salt);
+    l.shareCode = newCode(); // 활성화 코드는 한 번만 쓸 수 있게 교체
+    return { token: issueToken(l.id), user: publicUser(l) };
+  },
+  // ---- 관리자: 강사 계정 관리 ----
+  'GET /api/staff': async (req) => {
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    return { staff: Object.values(db.users).filter(isStaff).map((s) => ({ id: s.id, name: s.name, email: s.email, role: s.role, students: s.role === 'teacher' ? s.links.length : null })) };
+  },
+  'POST /api/staff': async (req) => {
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    const b = await readBody(req);
+    const email = clipStr(b.email, 100).toLowerCase(), password = String(b.password || ''), name = clipStr(b.name, 20);
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'badEmail');
+    if (password.length < 8) throw new HttpError(400, 'pwShort');
+    if (!name) throw new HttpError(400, 'nameReq');
+    if (!['teacher', 'admin'].includes(b.role)) throw new HttpError(400, 'roleBad');
+    if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
+    const salt = crypto.randomBytes(16).toString('hex');
+    const s = newUser({ email, name, role: b.role, salt, hash: hashPw(password, salt) });
+    db.users[s.id] = s; persist();
+    return { id: s.id };
+  },
+  'POST /api/schedule': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeSchedule(await readBody(req), langOf(req)); },
+  'POST /api/diagnosis': async (req) => { limit('ai:' + ip(req), 20, 10 * 60000); return aiMod.makeDiagnosis(await readBody(req), langOf(req)); },
   'POST /api/plan': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makePlan(await readBody(req), langOf(req)); },
   'POST /api/quiz': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makeQuiz(await readBody(req), langOf(req)); },
 };
 
+// ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
+const paramRoutes = [
+  ['GET', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
+    const u = needUser(req), l = learnerOr404(u, id);
+    const t = teacherOf(l.id);
+    return { user: { id: l.id, name: l.name, managed: !l.email, shareCode: isStaff(u) ? l.shareCode : undefined }, data: dataFor(u, l), teacher: t ? { id: t.id, name: t.name } : null, canWrite: canWrite(u, l) };
+  }],
+  ['PUT', /^\/api\/students\/([\w-]+)\/data$/, async (req, url, [id]) => {
+    const u = needUser(req);
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true);
+    const b = await readBody(req);
+    const allowed = DATA_KEYS.filter((k) => k !== 'chat' && !(l.email && k === 'consent')); // 본인 계정 학생의 동의 설정은 강사가 바꿀 수 없다
+    const clean = sanitizeData(b.data, allowed);
+    if ('deep' in clean && !l.data?.consent?.wellbeing) { // 정서웰빙 기록은 동의 없이는 강사 화면에 없으므로, 저장 시 기존 값을 그대로 보존
+      const prev = l.data?.deep?.wellbeing;
+      if (prev) clean.deep.wellbeing = prev; else delete clean.deep.wellbeing;
+    }
+    storeData(l, clean);
+    return { ok: true };
+  }],
+  ['PUT', /^\/api\/students\/([\w-]+)\/meta$/, async (req, url, [id]) => { // 담당 강사 배정 (관리자)
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    const l = learnerOr404(u, id);
+    const b = await readBody(req);
+    const t = db.users[b.teacherId];
+    if (b.teacherId === '') { for (const o of Object.values(db.users)) if (o.role === 'teacher') o.links = o.links.filter((x) => x !== l.id); }
+    else if (t && t.role === 'teacher') assignTeacher(l.id, t.id);
+    else throw new HttpError(400, 'roleBad');
+    persist();
+    return { ok: true };
+  }],
+  ['DELETE', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
+    const u = needUser(req);
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true);
+    if (l.email) { u.links = (u.links || []).filter((x) => x !== id); persist(); return { ok: true, unlinked: true }; } // 본인 계정은 삭제하지 않고 연결만 해제
+    dropSessions(l.id); delete db.users[l.id];
+    for (const o of Object.values(db.users)) o.links = (o.links || []).filter((x) => x !== id);
+    persist();
+    return { ok: true };
+  }],
+  ['PUT', /^\/api\/staff\/([\w-]+)$/, async (req, url, [id]) => {
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    const t = db.users[id];
+    if (!t || !isStaff(t)) throw new HttpError(404, 'notFound');
+    const b = await readBody(req);
+    if (b.role && b.role !== t.role) {
+      if (!['teacher', 'admin'].includes(b.role)) throw new HttpError(400, 'roleBad');
+      if (t.role === 'admin' && adminCount() <= 1) throw new HttpError(400, 'lastAdmin');
+      if (b.role === 'teacher') t.links = t.links || [];
+      t.role = b.role;
+    }
+    if (b.name !== undefined) { const n = clipStr(b.name, 20); if (!n) throw new HttpError(400, 'nameReq'); t.name = n; }
+    if (b.password) {
+      if (String(b.password).length < 8) throw new HttpError(400, 'pwShort');
+      t.salt = crypto.randomBytes(16).toString('hex'); t.hash = hashPw(String(b.password), t.salt); dropSessions(t.id);
+    }
+    persist();
+    return { ok: true };
+  }],
+  ['DELETE', /^\/api\/staff\/([\w-]+)$/, async (req, url, [id]) => {
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    const t = db.users[id];
+    if (!t || !isStaff(t)) throw new HttpError(404, 'notFound');
+    if (t.id === u.id) throw new HttpError(400, 'selfDelete');
+    if (t.role === 'admin' && adminCount() <= 1) throw new HttpError(400, 'lastAdmin');
+    dropSessions(t.id); delete db.users[t.id]; persist(); // 담당 학생은 삭제되지 않고 '미배정'이 된다
+    return { ok: true };
+  }],
+];
+
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   for (const [k, v] of Object.entries(SEC_HEADERS)) res.setHeader(k, v);
-  const handler = routes[`${req.method} ${url.pathname}`];
+  let handler = routes[`${req.method} ${url.pathname}`], args = [];
+  if (!handler) for (const [method, re, fn] of paramRoutes) { const m = method === req.method && url.pathname.match(re); if (m) { handler = fn; args = [m.slice(1)]; break; } }
   if (handler) {
     try {
-      const out = await handler(req, url);
+      const out = await handler(req, url, ...args);
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(out));
     } catch (e) {
