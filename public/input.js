@@ -1,7 +1,7 @@
 // 학생 정보·입력 (강사·관리자): 한 화면에서 기본 정보·목표·검사 결과·성적·시간표·주간계획·할 일·진단서를 모두 입력/수정
 const ORG_TYPES = ['language', 'studyroom', 'consultant'];
 const inOpen = new Set(['basic']); // 펼쳐 둔 섹션(다시 그려도 유지)
-const IN_SECTIONS = [['basic', 'in_s_basic'], ['goal', 'in_s_goal'], ['tests', 'in_s_tests'], ['grades', 'in_s_grades'], ['sched', 'in_s_sched'], ['wp', 'in_s_wp'], ['tasks', 'in_s_tasks'], ['diag', 'in_s_diag']];
+const IN_SECTIONS = [['basic', 'in_s_basic'], ['intake', 'in_s_intake'], ['attend', 'in_s_attend'], ['career', 'in_s_career'], ['goal', 'in_s_goal'], ['tests', 'in_s_tests'], ['grades', 'in_s_grades'], ['sched', 'in_s_sched'], ['wp', 'in_s_wp'], ['tasks', 'in_s_tasks'], ['diag', 'in_s_diag']];
 let inDel = false, inMsg = '';
 
 const lines = (v) => String(v || '').split('\n').map((x) => x.trim()).filter(Boolean);
@@ -11,8 +11,10 @@ function renderInput(app) {
   const v = state.viewAs;
   if (!v) { state.tab = 'roster'; return render(); }
   const sec = (id, title) => `<details class="fold" data-fold="${id}" id="fold_${id}" ${inOpen.has(id) ? 'open' : ''}><summary>${t(title)}</summary><div class="fold-body" id="in_${id}"></div></details>`;
-  app.innerHTML = `<div class="card"><h2>${t('in_title')}</h2><p class="sub">${t('in_help')}</p><div class="jump">${IN_SECTIONS.map(([id, k]) => `<button data-jump="${id}">${t(k)}</button>`).join('')}</div></div>
-    ${IN_SECTIONS.map(([id, k]) => sec(id, k)).join('')}`;
+  const secs = IN_SECTIONS.filter(([id]) => id !== 'career' || ['adult', 'college'].includes(state.profile.group)); // 커리어 섹션은 성인·대학생만
+  app.innerHTML = `<div class="card"><h2>${t('in_title')}</h2><p class="sub">${t('in_help')}</p><div class="jump">${secs.map(([id, k]) => `<button data-jump="${id}">${t(k)}</button>`).join('')}</div></div>
+    ${secs.map(([id, k]) => sec(id, k)).join('')}`;
+  intakeCard($('#in_intake')); attendanceView($('#in_attend')); if ($('#in_career')) careerView($('#in_career'));
   basicCard($('#in_basic')); goalView($('#in_goal')); testsCard($('#in_tests')); gradesView($('#in_grades')); schedView($('#in_sched')); weekplanView($('#in_wp')); tasksCard($('#in_tasks')); diagCard($('#in_diag'));
   app.querySelectorAll('details[data-fold]').forEach((d) => d.addEventListener('toggle', () => { d.open ? inOpen.add(d.dataset.fold) : inOpen.delete(d.dataset.fold); }));
   app.querySelectorAll('[data-jump]').forEach((b) => (b.onclick = () => { const d = $('#fold_' + b.dataset.jump); d.open = true; inOpen.add(b.dataset.jump); d.scrollIntoView({ behavior: 'smooth', block: 'start' }); }));
@@ -28,20 +30,25 @@ function basicCard(el) {
     <div class="row"><select id="bgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${p.group === k ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select>
       <input type="text" id="bschool" maxlength="40" placeholder="${t('reg_school')}" value="${esc(p.school)}"></div>
     <div class="row"><select id="borg"><option value="">${t('ot_none')}</option>${ORG_TYPES.map((k) => `<option value="${k}" ${p.orgType === k ? 'selected' : ''}>${t('ot_' + k)}</option>`).join('')}</select></div>
+    <div class="row"><input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}"><select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select></div>
+    <div class="row"><input type="text" id="bpname" maxlength="20" placeholder="${t('par_name')}" value="${esc(p.parentName || '')}"><input type="text" id="bpphone" maxlength="30" placeholder="${t('par_phone')}" value="${esc(p.parentPhone || '')}"></div>
+    <div class="row"><span class="sub">${t('ns_label')}</span><input type="date" id="bnext" value="${esc(p.nextSession || '')}" style="max-width:170px"></div>
     <label class="row"><input type="checkbox" id="bs1" ${sv.study !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
     <label class="row"><input type="checkbox" id="bs2" ${sv.career !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
     <textarea id="bnote" rows="2" maxlength="200" placeholder="${t('reg_note')}">${esc(p.note)}</textarea>
     <p class="sub">${t('ta_note_help')}</p><textarea id="btnote" rows="2" maxlength="300" placeholder="${t('ta_note')}">${esc(p.teacherNote)}</textarea>
     ${admin ? `<div class="row"><span class="sub">${t('in_teacher')}</span><select id="bteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${v.teacher?.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>` : ''}
+    ${v.managed ? `<label class="row"><input type="checkbox" id="brs" ${state.consent.research ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_rs')}</span></label><p class="sub">${t('consent_rs_note')}</p>` : ''}
     ${v.managed ? `<p>${t('in_code')}: <b style="font-size:1.2em;letter-spacing:2px">${esc(v.shareCode || '')}</b></p><p class="sub">${t('reg_code_help')}</p>` : `<p class="sub">${t('in_has_account')}</p>`}
     <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
   bindParentLinkCard();
   const upd = () => {
-    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value;
+    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value;
     p.services = { study: $('#bs1').checked, career: $('#bs2').checked }; p.note = $('#bnote').value.trim(); p.teacherNote = $('#btnote').value.trim();
     state.viewAs.name = p.name; save('profile'); $('#bmsg').textContent = t('saved');
   };
-  ['#bname', '#bgroup', '#bschool', '#borg', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => ($(s).onchange = upd));
+  ['#bname', '#bgroup', '#bschool', '#borg', '#bclass', '#bstatus', '#bpname', '#bpphone', '#bnext', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => ($(s).onchange = upd));
+  if ($('#brs')) $('#brs').onchange = (e) => { state.consent = { ...state.consent, research: e.target.checked }; save('consent'); $('#bmsg').textContent = t('saved'); };
   if ($('#bteacher')) $('#bteacher').onchange = async (e) => {
     try { await api(`/api/students/${v.id}/meta`, { method: 'PUT', body: { teacherId: e.target.value } }); v.teacher = roster.teachers.find((x) => x.id === e.target.value) || null; roster.loaded = false; $('#bmsg').textContent = t('saved'); } catch (er) { $('#bmsg').textContent = er.message; }
   };

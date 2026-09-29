@@ -26,12 +26,12 @@ const sum = (a) => a.reduce((x, y) => x + y, 0);
 const ddayCell = (l) => (l.goal.dday === null ? '' : ` <span class="tag">${ddayText(l.goal.dday)}</span>`);
 
 // ---------- 학생 목록 (강사/관리자) ----------
-const roster = { learners: [], teachers: [], loaded: false, loading: false, q: '', teacher: '', watch: false, flag: '', bulkMsg: '', bulkNote: '', sel: new Set(), err: '', summary: '', msg: '' };
+const roster = { learners: [], teachers: [], loaded: false, loading: false, q: '', teacher: '', watch: false, flag: '', cls: '', left: false, bulkMsg: '', bulkNote: '', sel: new Set(), err: '', summary: '', msg: '' };
 async function loadRoster() {
   roster.loading = true;
   try { const r = await api('/api/dashboard?today=' + today()); roster.learners = r.learners; roster.teachers = r.teachers || []; roster.err = ''; } catch (e) { roster.err = e.message; }
   roster.loading = false; roster.loaded = true;
-  if (state.tab === 'roster' && !state.viewAs) render();
+  if (['roster', 'classes'].includes(state.tab) && !state.viewAs) render();
 }
 function weeklySummary(list) {
   const n = list.length, w = list.filter((l) => l.status === 'watch');
@@ -52,11 +52,12 @@ function todayTiles() {
 function renderRoster(app) {
   if (!roster.loaded && !roster.loading) loadRoster();
   const admin = roleOf() === 'admin', q = roster.q.trim().toLowerCase();
-  const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l));
+  const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l) && (!roster.cls || (l.className || '') === (roster.cls === '_none' ? '' : roster.cls)) && (roster.left || l.enroll !== 'left'));
   const watchN = roster.learners.filter((l) => l.status === 'watch').length;
   app.innerHTML = `${roster.learners.length ? `<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
       <div class="row"><input type="text" id="rq" placeholder="${t('roster_search')}" value="${esc(roster.q)}">
         ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
+      <div class="row"><select id="rcls"><option value="">${t('cls_all')}</option>${[...new Set(roster.learners.map((l) => l.className || ''))].filter((n) => n).sort().map((n) => `<option value="${esc(n)}" ${roster.cls === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rleft" ${roster.left ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cls_show_left')}</span></label></div>
       <label class="row"><input type="checkbox" id="rw" ${roster.watch ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('roster_watch_only')} <span class="sub">(${watchN})</span></span></label>
       <div class="row"><input type="text" id="lcode" maxlength="8" placeholder="${t('code_ph')}" style="max-width:220px"><button id="lbtn">${t('btn_link')}</button><span class="sub" id="lmsg">${esc(roster.msg)}</span></div>
       <div class="row"><button id="wsum">${t('ws_btn')}</button><button id="rcsv">${t('csv_btn')}</button><button id="rreload">${t('btn_reload')}</button></div>
@@ -64,13 +65,15 @@ function renderRoster(app) {
       ${roster.err ? `<p class="sub">${esc(roster.err)}</p>` : ''}</div>
     ${roster.loading && !roster.learners.length ? `<p class="sub">${t('loading')}</p>` : list.length ? `<div class="card"><div class="tscroll"><table class="wplan roster"><thead><tr><th></th><th>${t('roster_name')}</th><th>${t('roster_goal')}</th><th>${t('stat_streak')}</th><th>${t('last7')}</th><th>${t('roster_tasks')}</th><th>${t('rep_checkin_lbl')}</th><th>${t('roster_status')}</th>${admin ? `<th>${t('teacher_lbl')}</th>` : ''}<th></th></tr></thead><tbody>
       ${list.map((l) => `<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${roster.sel.has(l.id) ? 'checked' : ''}></td>
-        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}</span>${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
+        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}${l.className ? ' · ' + esc(l.className) : ''}</span>${l.enroll === 'paused' ? ` <span class="tag">${t('en_paused')}</span>` : l.enroll === 'left' ? ` <span class="tag">${t('en_left')}</span>` : ''}${l.nextSession && l.nextSession >= today() ? ` <span class="tag">📅 ${esc(l.nextSession.slice(5))}</span>` : ''}${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
         <td class="detail">${esc(l.goal.label)}${ddayCell(l)}</td><td>${unit('unit_day', l.streak)}</td><td>${unit('unit_min', sum(l.week))}</td><td>${l.doneCount}/${l.doneCount + l.openCount}</td><td>${l.checkinsWeek}</td>
         <td><span class="pill ${l.status}">${t('st_' + l.status)}</span></td>${admin ? `<td>${l.teacher ? esc(l.teacher.name) : `<span class="sub">${t('unassigned')}</span>`}</td>` : ''}
         <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}
     ${roster.learners.length ? `<div class="card"><h2>${t('bm_title')}</h2><p class="sub">${t('bm_help', { n: roster.sel.size })}</p><textarea id="bmtext" rows="2" maxlength="500" placeholder="${t('msg_ph')}">${esc(roster.bulkMsg)}</textarea><button class="primary" id="bmsend">${t('bm_send')}</button> <span class="sub" id="bmnote">${esc(roster.bulkNote)}</span></div>` : ''}`;
   $('#rq').oninput = (e) => { roster.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('#rq'); el.focus(); el.setSelectionRange(pos, pos); };
   if ($('#rt')) $('#rt').onchange = (e) => { roster.teacher = e.target.value; render(); };
+  $('#rcls').onchange = (e) => { roster.cls = e.target.value; render(); };
+  $('#rleft').onchange = (e) => { roster.left = e.target.checked; render(); };
   $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
   app.querySelectorAll('[data-qs]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.qs; render(); }));
   app.querySelectorAll('[data-flag]').forEach((b) => (b.onclick = () => { if (b.dataset.flag === 'watch') { roster.watch = !roster.watch; } else roster.flag = roster.flag === b.dataset.flag ? '' : b.dataset.flag; render(); }));

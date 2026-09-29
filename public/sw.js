@@ -1,6 +1,6 @@
 // 앱 설치·오프라인용 서비스 워커. 화면 파일만 저장하고, API 응답(개인 데이터)은 절대 저장하지 않는다.
 const CACHE = 'jinro-shell-v1';
-const SHELL = ['/', '/index.html', '/style.css', '/theme.js', '/i18n.js', '/i18n2.js', '/tests.js', '/app.js', '/plan.js', '/tests-ui.js', '/quiz.js', '/report.js', '/staff.js', '/extras.js', '/input.js', '/ops.js', '/main.js', '/icon.svg', '/manifest.webmanifest'];
+const SHELL = ['/', '/index.html', '/style.css', '/theme.js', '/i18n.js', '/i18n2.js', '/tests.js', '/app.js', '/plan.js', '/tests-ui.js', '/quiz.js', '/report.js', '/staff.js', '/extras.js', '/input.js', '/ops.js', '/consult.js', '/main.js', '/icon.svg', '/manifest.webmanifest'];
 self.addEventListener('install', (e) => e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting())));
 self.addEventListener('activate', (e) => e.waitUntil(caches.keys().then((ks) => Promise.all(ks.filter((k) => k !== CACHE).map((k) => caches.delete(k)))).then(() => self.clients.claim())));
 self.addEventListener('fetch', (e) => {

@@ -25,7 +25,7 @@ Object.assign(UI.vi, { demo_view: 'Chuyển chế độ xem', demo_learner: 'H�
 """
 app = rd(PUB, 'app.js')
 app = rep(app, 'const PREVIEW = false;', 'const PREVIEW = true;')
-app = rep(app, "const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'quiz', 'coach', 'account'];", "const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'report'];")
+app = rep(app, "const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'quiz', 'coach', 'account'];", "const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'career', 'report'];")
 app = rep(app, "async function api(path, { method = 'GET', body } = {}) {\n", """function previewPlan(goal, weeks, hours) {
   const steps = { ko: ['현재 수준 점검과 학습 자료 정하기', '핵심 개념 익히기', '문제/실습으로 적용하기', '틀린 부분 복습·정리하기', '실전 점검 및 다음 목표 세우기'], vi: ['Đánh giá trình độ hiện tại và chọn tài liệu học', 'Nắm vững khái niệm cốt lõi', 'Áp dụng qua bài tập/thực hành', 'Ôn lại và tổng hợp phần làm sai', 'Kiểm tra thực tế và đặt mục tiêu tiếp theo'] }[lang];
   const per = lang === 'vi' ? hours + ' giờ/tuần' : '주 ' + hours + '시간';
@@ -51,7 +51,7 @@ main = rep(main, "langSel.onchange = () => { setLang(langSel.value); render(); a
 report = rd(PUB, 'report.js')
 report = rep(report, 'const ro = state.ro || isGuardianView();', 'const ro = state.ro || isGuardianView() || PREVIEW;')
 report = rep(report, 'const printBtn = () => `', 'const printBtn = () => PREVIEW ? \'\' : `')
-scripts = [i18n, rd(PUB, 'tests.js'), app, rd(PUB, 'plan.js'), rd(PUB, 'tests-ui.js'), rd(PUB, 'quiz.js'), report, rd(PUB, 'staff.js'), rd(PUB, 'extras.js'), rd(PUB, 'input.js'), rd(PUB, 'ops.js'), rd(ROOT, 'preview', 'demo.js'), main]
+scripts = [i18n, rd(PUB, 'tests.js'), app, rd(PUB, 'plan.js'), rd(PUB, 'tests-ui.js'), rd(PUB, 'quiz.js'), report, rd(PUB, 'staff.js'), rd(PUB, 'extras.js'), rd(PUB, 'input.js'), rd(PUB, 'ops.js'), rd(PUB, 'consult.js'), rd(ROOT, 'preview', 'demo.js'), main]
 page = '<title>진로AI 코치</title>\n<style>\n' + css + '\n</style>\n' + body + '\n' + ''.join('<script>\n' + s + '\n</script>\n' for s in scripts)
 out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'preview', 'preview.html')
 open(out, 'w', encoding='utf-8').write(page)

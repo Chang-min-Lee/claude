@@ -11,7 +11,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const { sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
+const { sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, STAFF_KEYS, ATT, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -309,6 +309,10 @@ function summarize(u, todayStr, viewer) {
   const ddaySoon = dday !== null && dday >= 0 && dday <= 14;
   const flags = { idle, validity, wellbeing, ddaySoon };
   const t = teacherOf(u.id);
+  const att = d.attendance || {}, from45 = new Date(base); from45.setDate(from45.getDate() - 44), from30 = new Date(base); from30.setDate(from30.getDate() - 29);
+  const attRecent = Object.fromEntries(Object.entries(att).filter(([k]) => k >= dayKey(from45) && k <= todayStr));
+  const att30 = Object.entries(att).filter(([k]) => k >= dayKey(from30) && k <= todayStr).map(([, v]) => v);
+  const attRate = att30.length ? Math.round((100 * att30.filter((v) => v === 'p' || v === 'l').length) / att30.length) : null;
   return {
     id: u.id, name: u.name, managed: !u.email, group: d.profile?.group || null, streak, week, today: week[6],
     openTasks: tasks.filter((x) => !x.done).slice(0, 5).map((x) => x.text), doneCount: tasks.filter((x) => x.done).length, openCount: tasks.filter((x) => !x.done).length,
@@ -317,6 +321,7 @@ function summarize(u, todayStr, viewer) {
     intensity: sdl === undefined ? null : sdl >= 3.8 ? 'loose' : sdl >= 3.0 ? 'normal' : 'tight',
     awaiting: !!(viewer && isStaff(viewer) && d.messages?.at(-1)?.from === 'learner'),
     flags, status: idle || validity || wellbeing ? 'watch' : 'ok',
+    className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
   };
 }
 
@@ -331,6 +336,27 @@ function storeData(learner, clean) {
 // ---------- 라우터 ----------
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ip = (req) => (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
+// 검사·상담·출결 등 데이터가 얼마나 쌓였는지 요약한다 (개인 식별 정보 없음)
+function analyticsOf(list) {
+  const n = list.length, by = (f) => list.reduce((m, l) => { const k = f(l) || '-'; m[k] = (m[k] || 0) + 1; return m; }, {});
+  const tests = {};
+  for (const id of SHARED_DEEP) {
+    const res = list.map((l) => l.data?.deep?.[id]?.at(-1)).filter(Boolean), keys = res[0] ? Object.keys(res[0].cat) : [];
+    tests[id] = { n: res.length, invalid: res.filter((r) => r.v?.length).length, avg: res.length ? Math.round((res.reduce((a, r) => a + r.overall, 0) / res.length) * 10) / 10 : null,
+      cats: Object.fromEntries(keys.map((k) => [k, res.length ? Math.round((res.reduce((a, r) => a + (r.cat[k] || 0), 0) / res.length) * 10) / 10 : null])),
+      retake: list.filter((l) => (l.data?.deep?.[id]?.length || 0) >= 2).length };
+  }
+  const complete = list.filter((l) => SHARED_DEEP.every((id) => l.data?.deep?.[id]?.length)).length;
+  const now = Date.now(), week = dayKey(new Date(now - 6 * 86400000));
+  return {
+    n, groups: by((l) => l.data?.profile?.group), orgTypes: by((l) => l.data?.profile?.orgType), classes: by((l) => l.data?.profile?.className), enroll: by((l) => l.data?.profile?.status || 'active'),
+    tests, complete, withGoal: list.filter((l) => l.data?.goal?.label).length, withGrades: list.filter((l) => (l.data?.grades || []).length).length,
+    withSessions: list.filter((l) => (l.data?.counsel || []).length).length, sessions: list.reduce((a, l) => a + (l.data?.counsel || []).length, 0),
+    withDiag: list.filter((l) => l.data?.diag?.date).length, retest: list.filter((l) => SHARED_DEEP.some((id) => (l.data?.deep?.[id]?.length || 0) >= 2)).length,
+    activeWeek: list.filter((l) => Object.keys(l.data?.log || {}).some((k) => k >= week) || (l.data?.checkins || []).some((c) => c.date >= week)).length,
+    attMarks: list.reduce((a, l) => a + Object.keys(l.data?.attendance || {}).length, 0), research: list.filter((l) => l.data?.consent?.research).length,
+  };
+}
 // 기관(학원) 설정: 이름·연락처. 로그인 화면과 문서 머리글에 쓰인다.
 const orgSettings = () => ({ orgName: '', orgPhone: '', orgEmail: '', ...(db.kv?.org || {}) });
 const routes = {
@@ -386,7 +412,7 @@ const routes = {
     const u = needUser(req);
     if (u.role !== 'learner') throw new HttpError(403, 'learnerOnly');
     const b = await readBody(req);
-    storeData(u, sanitizeData(b.data));
+    storeData(u, sanitizeData(b.data, CLIENT_KEYS.filter((k) => !STAFF_KEYS.includes(k))));
     return { ok: true };
   },
   'POST /api/password': async (req) => {
@@ -445,6 +471,38 @@ const routes = {
     const out = { learners: list.map((l) => summarize(l, today, u)) };
     if (u.role === 'admin') out.teachers = Object.values(db.users).filter((x) => x.role === 'teacher').map((t) => ({ id: t.id, name: t.name }));
     return out;
+  },
+  // 출결 일괄 기록: { date, marks: { 학생id: 'p'|'l'|'a'|'e'|'' } }  ('' 은 기록 지우기). 담당 학생만 저장된다.
+  'POST /api/attendance': async (req) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const b = await readBody(req);
+    if (!isDate(b.date)) throw new HttpError(400, 'badReq');
+    let saved = 0, skipped = 0;
+    for (const [id, st] of Object.entries(b.marks && typeof b.marks === 'object' ? b.marks : {}).slice(0, 300)) {
+      const l = db.users[id];
+      if (!l || l.role !== 'learner' || !canWrite(u, l) || !(st === '' || ATT.includes(st))) { skipped++; continue; }
+      const att = { ...(l.data?.attendance || {}) };
+      if (st === '') delete att[b.date]; else att[b.date] = st;
+      storeData(l, { attendance: sanitizers.attendance(att) }); saved++;
+    }
+    return { saved, skipped };
+  },
+  // 데이터 현황: 검사·상담·출결이 얼마나 쌓였는지 (관리자는 전체, 강사는 담당 학생)
+  'GET /api/analytics': async (req) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const list = u.role === 'admin' ? Object.values(db.users).filter((x) => x.role === 'learner') : (u.links || []).map((id) => db.users[id]).filter((x) => x && x.role === 'learner');
+    return analyticsOf(list);
+  },
+  // 연구·통계 동의(consent.research)한 학생만, 이름·학교·목표 없이 검사 점수만 내려준다.
+  'GET /api/analytics/export': async (req) => {
+    const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden');
+    const rows = Object.values(db.users).filter((x) => x.role === 'learner' && x.data?.consent?.research).map((l) => {
+      const d = l.data || {}, r = { id: sha('anon:' + l.id).slice(0, 10), group: d.profile?.group || '', orgType: d.profile?.orgType || '' };
+      for (const id of SHARED_DEEP) { const last = d.deep?.[id]?.at(-1); r[id] = last ? { date: last.date, overall: last.overall, cat: last.cat, invalid: !!last.v?.length } : null; }
+      r.sessions = (d.counsel || []).length; r.checkins = (d.checkins || []).length; r.gradeCount = (d.grades || []).length;
+      return r;
+    });
+    return { rows };
   },
   'POST /api/chat': async (req) => {
     limit('ai:' + ip(req), 30, 10 * 60000);
@@ -552,7 +610,8 @@ const paramRoutes = [
     const l = learnerOr404(u, id, true), b = await readBody(req);
     const text = clipStr(b.text, 1000);
     if (!text) throw new HttpError(400, 'noNote');
-    const entry = { id: crypto.randomUUID(), date: isDate(b.date) ? b.date : dayKey(new Date()), at: new Date().toISOString(), by: u.name, byId: u.id, text };
+    const extra = sanitizers.counsel([{ id: 'x', text: 'x', topic: b.topic, next: b.next, actions: b.actions }])[0];
+    const entry = { id: crypto.randomUUID(), date: isDate(b.date) ? b.date : dayKey(new Date()), at: new Date().toISOString(), by: u.name, byId: u.id, text, topic: extra.topic, next: extra.next, actions: extra.actions };
     const list = [...(l.data?.counsel || []), entry].slice(-300);
     l.data = { ...l.data, counsel: list };
     persist(l);

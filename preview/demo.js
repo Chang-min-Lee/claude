@@ -43,6 +43,16 @@ function demoInit() {
     } }),
   };
   const staff = [{ id: 't_admin', name: L('관리자(마스터)','Quản trị viên'), email: 'admin@demo.kr', role: 'admin' }, { id: 't_kim', name: L('김하리 강사','Cô Kim Hari'), email: 'kim@demo.kr', role: 'teacher' }, { id: 't_park', name: L('박선영 강사','Cô Park Seon-young'), email: 'park@demo.kr', role: 'teacher' }];
+  // 반·출결·상담 세션·커리어 샘플
+  const attP = (pat) => Object.fromEntries(pat.map((v, i) => [dAgo(i + 1), v]).filter(([, v]) => v));
+  Object.assign(students.mai.data.profile, { className: L('고2 TOPIK반', 'Lớp TOPIK 11'), parentName: L('어머니', 'Mẹ'), status: 'active', nextSession: dAhead(3) });
+  students.mai.data.attendance = attP(['p', 'p', 'l', 'p', 'p', '', '', 'p', 'p', 'a', 'p', 'p', '', '', 'p']);
+  students.mai.data.intake = { concern: L('한국 대학 진학 준비가 막막함', 'Băn khoăn về việc chuẩn bị vào đại học Hàn Quốc'), goal: 'TOPIK 4', strengths: L('꾸준함, 어휘 암기', 'Kiên trì, học từ vựng tốt'), interests: '', habits: '', background: '' };
+  Object.assign(students.nam.data.profile, { className: L('중3 수학반', 'Lớp Toán 9'), status: 'active' });
+  students.nam.data.attendance = attP(['p', 'a', 'a', 'p', 'l', '', '', 'p', 'a', 'p']);
+  Object.assign(students.huong.data.profile, { className: '', status: 'active' });
+  students.huong.data.career = { job: L('영업 사무', 'Nhân viên kinh doanh'), industry: L('제조업', 'Sản xuất'), years: 5, target: L('디지털 마케터', 'Chuyên viên marketing số'), targetIndustry: 'IT', skills: [L('고객 응대', 'Chăm sóc khách hàng'), 'Excel'], motive: L('성장 정체', 'Không còn cơ hội phát triển'), constraints: L('퇴근 후 학습 가능', 'Chỉ học được sau giờ làm') };
+  students.huong.data.jobs = [{ company: 'ABC Media', role: 'Marketing Executive', status: 'interview', date: dAgo(2), note: '' }, { company: 'XYZ Digital', role: 'Content Marketer', status: 'applied', date: dAgo(5), note: '' }];
   return { students, staff };
 }
 let demo = demoInit();
@@ -99,7 +109,7 @@ function demoApi(path, { method = 'GET', body } = {}) {
   }
   if ((m = p.match(/^\/api\/students\/([\w-]+)\/counsel(?:\/([\w-]+))?$/))) {
     const s = demo.students[m[1]]; if (!s || !isStaffRole()) demoErr(t('req_failed'));
-    if (method === 'POST') s.data.counsel = [...(s.data.counsel || []), { id: 'c' + Math.random().toString(36).slice(2, 8), date: body.date || today(), at: new Date().toISOString(), by: state.user.name, byId: state.user.id, text: String(body.text).slice(0, 1000) }];
+    if (method === 'POST') s.data.counsel = [...(s.data.counsel || []), { id: 'c' + Math.random().toString(36).slice(2, 8), date: body.date || today(), at: new Date().toISOString(), by: state.user.name, byId: state.user.id, topic: String(body.topic || '').slice(0, 60), next: body.next || '', actions: (body.actions || []).slice(0, 5), text: String(body.text).slice(0, 1000) }];
     if (method === 'DELETE') s.data.counsel = (s.data.counsel || []).filter((x) => x.id !== m[2]);
     return { counsel: s.data.counsel };
   }
@@ -110,6 +120,13 @@ function demoApi(path, { method = 'GET', body } = {}) {
     return { id, shareCode: code };
   }
   if ((m = p.match(/^\/api\/students\/([\w-]+)$/)) && method === 'DELETE') { delete demo.students[m[1]]; return { ok: true }; }
+  if (p === '/api/attendance' && method === 'POST') { let n = 0; for (const [id, st] of Object.entries(body.marks || {})) { const x = demo.students[id]; if (!x) continue; x.data.attendance = { ...(x.data.attendance || {}) }; if (st) x.data.attendance[body.date] = st; else delete x.data.attendance[body.date]; n++; } return { saved: n, skipped: 0 }; }
+  if (p === '/api/analytics/export') return { rows: [] };
+  if (p === '/api/analytics' && method === 'GET') {
+    const L2 = Object.values(demo.students), tests = {};
+    Object.keys(DEMO_CATS).filter((id) => id !== 'wellbeing').forEach((id) => { const r = L2.map((x) => x.data.deep?.[id]?.at(-1)).filter(Boolean); tests[id] = { n: r.length, invalid: 0, retake: 0, avg: r.length ? Math.round(r.reduce((a, b) => a + b.overall, 0) / r.length * 10) / 10 : null, cats: {} }; });
+    return { n: L2.length, groups: { high: 1, middle: 1, adult: 1 }, orgTypes: {}, classes: {}, enroll: {}, tests, complete: 1, withGoal: 3, withGrades: 2, withSessions: 1, sessions: 1, withDiag: 0, retest: 0, activeWeek: 3, attMarks: 25, research: 0 };
+  }
   if (p === '/api/settings') { if (method === 'PUT') demo.org = { orgName: body.orgName || '', orgPhone: body.orgPhone || '', orgEmail: body.orgEmail || '' }; return demo.org || { orgName: '스마트어학원 (데모)', orgPhone: '', orgEmail: '' }; }
   if (p === '/api/link' && method === 'POST') { const s = Object.values(demo.students).find((x) => x.shareCode === String(body.code).toUpperCase()); if (!s) demoErr(t('req_failed')); if (demoRole() === 'teacher') s.teacherId = state.user.id; else (demo.guardianLinks = demo.guardianLinks || ['mai']).push(s.id); return { ok: true, name: s.name }; }
   if (p === '/api/unlink') { if (demoRole() === 'guardian') demo.guardianLinks = (demo.guardianLinks || ['mai']).filter((x) => x !== body.id); else if (demo.students[body.id]) demo.students[body.id].teacherId = null; return { ok: true }; }

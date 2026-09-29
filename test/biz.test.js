@@ -74,3 +74,45 @@ test('재진단 회차(diagHist)와 진단서 검사 스냅샷 저장·검증', 
   assert.equal(r.data.diagHist.length, 1); assert.deepEqual(r.data.diagHist[0].tests, { holland: 3.5, bigfive: 5 }); // 정서웰빙 제외, 범위 보정
   assert.deepEqual(r.data.diag.tests, { holland: 4.1 });
 });
+
+test('반·출결: 강사만 기록, 담당 학생만, 학생 본인은 못 씀 + 요약에 출석률', async () => {
+  const day = new Date().toISOString().slice(0, 10);
+  const c2 = await post('/api/students', { name: '레 남', group: 'middle' }, S.t2); S.kid2 = c2.id;
+  await put(`/api/students/${S.kid}/data`, { data: { profile: { name: '응웬 마이', group: 'high', className: '고1 영어반', parentName: '엄마', parentPhone: '010-1', status: 'paused', nextSession: '2099-01-01' } } }, S.t1);
+  const r = await post('/api/attendance', { date: day, marks: { [S.kid]: 'p', [S.kid2]: 'a', bogus: 'p' } }, S.t1);
+  assert.equal(r.saved, 1); assert.equal(r.skipped, 2); // 남의 학생·없는 학생은 건너뜀
+  assert.equal((await post('/api/attendance', { date: 'bad', marks: {} }, S.t1)).status, 400);
+  assert.equal((await post('/api/attendance', { date: day, marks: {} })).status, 401);
+  await post('/api/attendance', { date: '2026-01-01', marks: { [S.kid]: 'l' } }, S.t1);
+  await post('/api/attendance', { date: '2026-01-02', marks: { [S.kid]: 'z' } }, S.t1); // 잘못된 값은 저장 안 됨
+  const dash = await get(`/api/dashboard?today=${day}`, S.t1); const l = dash.learners.find((x) => x.id === S.kid);
+  assert.equal(l.className, '고1 영어반'); assert.equal(l.enroll, 'paused'); assert.equal(l.nextSession, '2099-01-01'); assert.equal(l.attRate, 100); assert.equal(l.att[day], 'p'); assert.equal(l.att['2026-01-02'], undefined);
+  const kid = await get(`/api/students/${S.kid}`, S.t1); assert.equal(kid.data.attendance['2026-01-01'], 'l'); assert.equal(kid.data.attendance['2026-01-02'], undefined);
+  await post('/api/attendance', { date: day, marks: { [S.kid]: '' } }, S.t1); // 지우기
+  assert.equal((await get(`/api/students/${S.kid}`, S.t1)).data.attendance[day], undefined);
+  // 학생 본인 계정은 출결을 못 쓴다
+  const me = await post('/api/signup', { email: 's@x.co', password: 'password12', name: '학생', role: 'learner' }); 
+  await put('/api/data', { data: { attendance: { [day]: 'p' }, consent: { wellbeing: false, research: true } } }, me.token);
+  const mine = await get('/api/me', me.token); assert.equal(mine.data.attendance, undefined); assert.equal(mine.data.consent.research, true); S.me = me;
+});
+
+test('상담 세션(주제·과제·다음 상담일), 문진·커리어·지원 현황 검증', async () => {
+  const c = await post(`/api/students/${S.kid}/counsel`, { text: '진로 상담', topic: '유학 준비', next: '2099-02-01', actions: ['이력서 초안', '', 'a'.repeat(300)] }, S.t1);
+  const e = c.counsel.at(-1); assert.equal(e.topic, '유학 준비'); assert.equal(e.next, '2099-02-01'); assert.equal(e.actions.length, 2); assert.equal(e.actions[1].length, 100); assert.equal(e.text, '진로 상담');
+  const w = await put(`/api/students/${S.kid}/data`, { data: { intake: { concern: '진로가 막막함', evil: 'x' }, career: { job: '마케터', years: 99, skills: ['엑셀', ''], target: 'PM' }, jobs: [{ company: 'A사', role: 'PM', status: 'interview', date: '2026-09-01' }, { company: '', role: 'x' }, { company: 'B사', status: 'weird' }] } }, S.t1);
+  assert.equal(w.status, 200);
+  const d = (await get(`/api/students/${S.kid}`, S.t1)).data;
+  assert.equal(d.intake.concern, '진로가 막막함'); assert.equal(d.intake.evil, undefined); assert.equal(d.career.years, 60); assert.deepEqual(d.career.skills, ['엑셀']);
+  assert.equal(d.jobs.length, 2); assert.equal(d.jobs[1].status, 'interested');
+});
+
+test('데이터 현황(analytics)과 연구 동의 내보내기', async () => {
+  await put(`/api/students/${S.kid}/data`, { data: { deep: { holland: [{ date: '2026-09-01', cat: { R: 3, I: 4, A: 3, S: 3, E: 3, C: 3 }, overall: 3.2, v: [] }, { date: '2026-09-10', cat: { R: 3, I: 5, A: 3, S: 3, E: 3, C: 3 }, overall: 3.3, v: ['same'] }] }, consent: { wellbeing: false, research: true } } }, S.t1);
+  const a = await get('/api/analytics', S.admin);
+  assert.equal(a.status, 200); assert.ok(a.n >= 3); assert.equal(a.tests.holland.n, 1); assert.equal(a.tests.holland.retake, 1); assert.equal(a.tests.holland.invalid, 1); assert.equal(a.tests.holland.cats.I, 5); assert.equal(a.complete, 0); assert.ok(a.research >= 2);
+  assert.equal((await get('/api/analytics', S.t2)).n, 1); // 강사는 담당 학생만
+  assert.equal((await get('/api/analytics', S.me.token)).status, 403);
+  const ex = await get('/api/analytics/export', S.admin);
+  assert.equal(ex.rows.length, a.research); assert.ok(ex.rows.every((r) => !('name' in r) && r.id.length === 10 && !('wellbeing' in r)));
+  assert.equal((await get('/api/analytics/export', S.t1)).status, 403);
+});

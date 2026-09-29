@@ -23,15 +23,18 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 // ---- 상태: 동기화되는 데이터 키와 기본값 ----
 const DEFAULTS = {
   profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {},
-  consent: { wellbeing: false }, schedule: [], weekplan: [], weekhist: [],
+  consent: { wellbeing: false, research: false }, schedule: [], weekplan: [], weekhist: [],
   goal: { type: 'general', label: '', date: '', note: '', milestones: [] },
   grades: [], checkins: [], closeouts: [], diag: {}, diagHist: [],
+  attendance: {}, // 출결(강사 기록) 날짜 → p/l/a/e
+  intake: { concern: '', goal: '', strengths: '', interests: '', habits: '', background: '' }, // 초기 상담 문진
+  career: { job: '', industry: '', years: 0, target: '', targetIndustry: '', skills: [], motive: '', constraints: '' }, jobs: [], // 성인·대학생 커리어
   messages: [], counsel: [], // 서버가 관리(POST 전용) — 화면에서는 읽기만
 };
 const SERVER_KEYS = ['messages', 'counsel'];
 const SYNC = Object.keys(DEFAULTS).filter((k) => !SERVER_KEYS.includes(k)); // 저장(PUT) 대상
 const LOAD_KEYS = Object.keys(DEFAULTS);
-const normalize = (k, v) => (v === null || v === undefined ? clone(DEFAULTS[k]) : (k === 'goal' || k === 'consent' ? { ...DEFAULTS[k], ...v } : v));
+const normalize = (k, v) => (v === null || v === undefined ? clone(DEFAULTS[k]) : (['goal', 'consent', 'intake', 'career'].includes(k) ? { ...DEFAULTS[k], ...v } : v));
 
 let state = { token: store.get('token', null), user: null, tab: 'home', sub: { plan: 'schedule', report: 'comp' }, viewAs: null, ro: false, notice: null };
 LOAD_KEYS.forEach((k) => { state[k] = normalize(k, SERVER_KEYS.includes(k) ? null : store.get(k, null)); });
@@ -129,10 +132,10 @@ function profileForAI() {
 }
 
 // ---- 화면 전환 ----
-const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'quiz', 'coach', 'account'];
-const STUDENT_VIEW_TABS = ['home', 'input', 'tests', 'study', 'plan', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
+const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'quiz', 'coach', 'account'];
+const STUDENT_VIEW_TABS = ['home', 'input', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
-const STAFF_TABS = ['roster', 'register', 'staff', 'account'];
+const STAFF_TABS = ['roster', 'classes', 'register', 'data', 'staff', 'account'];
 const roleOf = () => state.user?.role || 'learner';
 const ICONS = {
   input: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13.5 8.5l3 3"/>',
@@ -148,6 +151,9 @@ const ICONS = {
   dash: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   roster: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.7-3.2 3-4.9 5.5-4.9s4.8 1.7 5.5 4.9"/><path d="M16 5.5a3 3 0 0 1 0 6M17.5 14.9c1.9.5 3 2 3.5 4.6"/>',
   register: '<circle cx="10" cy="8.5" r="3.4"/><path d="M3.5 19.5c.8-3.3 3.2-5 6.5-5s5.7 1.7 6.5 5M19 8v6M16 11h6"/>',
+  classes: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 13l2 2 3.5-3.5"/>',
+  data: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
+  career: '<rect x="3.5" y="7.5" width="17" height="12" rx="2.5"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 13h17"/>',
   staff: '<path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6z"/><path d="m9.3 12 2 2 3.6-3.8"/>',
 };
 const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg>`;
@@ -156,6 +162,7 @@ function tabOk(tab) { // 가입한 서비스(학습관리/진로컨설팅)에 �
   const sv = state.profile?.services || {};
   if (['study', 'plan', 'quiz'].includes(tab)) return sv.study !== false;
   if (tab === 'tests') return sv.career !== false;
+  if (tab === 'career') return ['adult', 'college'].includes(state.profile?.group); // 성인·대학생만
   if (tab === 'messages') return !!state.viewAs || (!!state.user && !PREVIEW) || (PREVIEW && !!state.viewAs);
   return true;
 }
@@ -167,7 +174,7 @@ function tabsNow() {
   if (role === 'admin') return STAFF_TABS;
   return LEARNER_TABS.filter(tabOk);
 }
-const RENDERERS = () => ({ home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
+const RENDERERS = () => ({ classes: renderClasses, data: renderAnalytics, career: renderCareer, home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
   document.documentElement.lang = lang; document.title = orgName(); $('#title').textContent = orgName();
@@ -229,6 +236,7 @@ function renderHome(app) {
       ${career}
       <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
     </div><div>
+      ${nextSessionCard()}
       ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}
       <div class="card"><h2>${t('heat_title')}</h2>${heatmapHtml()}<p class="sub">${t('heat_hint')}</p></div>
       <div class="card"><h2>${t('bd_title')}</h2>${badgesHtml()}</div>
@@ -354,7 +362,7 @@ function renderAccount(app) {
       ${learner ? `<div class="card"><h2>${t('link_title')}</h2><p>${t('link_code')}: <b style="font-size:1.3em;letter-spacing:2px">${esc(state.user.shareCode)}</b></p>
         <p class="sub">${t('link_desc')}</p>
         <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>
-        <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><p class="sub">${t('consent_note')}</p></div>` : ''}`;
+        <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><label class="row"><input type="checkbox" id="consentrs" ${state.consent.research ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_rs')}</span></label><p class="sub">${t('consent_note')} ${t('consent_rs_note')}</p></div>` : ''}`;
     bindOrgCard();
     $('#logout').onclick = async () => {
       await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
@@ -381,7 +389,8 @@ function renderAccount(app) {
     };
     if (learner) {
       $('#regen').onclick = async () => { state.user.shareCode = (await api('/api/regen-code', { method: 'POST' })).shareCode; render(); };
-      $('#consentwb').onchange = (e) => { state.consent = { wellbeing: e.target.checked }; save('consent'); };
+      $('#consentwb').onchange = (e) => { state.consent = { ...state.consent, wellbeing: e.target.checked }; save('consent'); };
+      if ($('#consentrs')) $('#consentrs').onchange = (e) => { state.consent = { ...state.consent, research: e.target.checked }; save('consent'); };
       api('/api/guardians').then(({ guardians }) => {
         const el = $('#glist'); if (!el) return;
         el.innerHTML = guardians.length ? t('linked_to') + ' ' + guardians.map((g) => `${esc(g.name)} <button data-u="${esc(g.id)}">${t('btn_unlink')}</button>`).join(' ') : t('no_guardians');

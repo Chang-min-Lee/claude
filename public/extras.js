@@ -54,13 +54,23 @@ function renderMessages(app) {
 function renderCounsel(app) {
   const sid = state.viewAs.id, list = state.counsel.slice().reverse(), canDel = (c) => roleOf() === 'admin' || c.byId === state.user?.id;
   app.innerHTML = `<div class="card"><h2>${t('cn_title')}</h2><p class="sub">${t('cn_help')}</p>
-      <div class="row"><input type="date" id="cndate" value="${today()}" style="max-width:170px"></div>
+      <div class="row"><input type="date" id="cndate" value="${today()}" style="max-width:170px"><input type="text" id="cntopic" maxlength="60" placeholder="${t('cn_topic')}"></div>
       <textarea id="cntext" rows="3" maxlength="1000" placeholder="${t('cn_ph')}"></textarea>
+      <textarea id="cnactions" rows="2" placeholder="${t('cn_actions_ph')}"></textarea>
+      <div class="row"><span class="sub">${t('ns_label')}</span><input type="date" id="cnnext" value="${esc(state.profile.nextSession || '')}" style="max-width:170px"></div>
+      <label class="row"><input type="checkbox" id="cnsend" checked style="flex:none;width:20px"> <span class="sub">${t('cn_send_tasks')}</span></label>
       <div class="row"><button class="primary" id="cnadd">${t('btn_add')}</button><span class="sub" id="cnmsg"></span></div></div>
-    <div class="card">${list.length ? list.map((c) => `<div class="task"><span><b>${esc(c.date)}</b> <span class="sub">${esc(c.by)}</span><br>${esc(c.text)}</span>${canDel(c) ? `<button data-cdel="${esc(c.id)}" aria-label="${t('btn_delete_item')}">✕</button>` : ''}</div>`).join('') : `<p class="sub">${t('cn_empty')}</p>`}</div>`;
+    <div class="card">${list.length ? list.map((c) => `<div class="task"><span><b>${esc(c.date)}</b> ${c.topic ? `<span class="tag strong">${esc(c.topic)}</span>` : ''} <span class="sub">${esc(c.by)}</span><br>${esc(c.text)}
+      ${c.actions?.length ? `<ul>${c.actions.map((a) => `<li>${esc(a)}</li>`).join('')}</ul>` : ''}${c.next ? `<span class="sub">${t('ns_label')}: ${esc(c.next)}</span>` : ''}</span>${canDel(c) ? `<button data-cdel="${esc(c.id)}" aria-label="${t('btn_delete_item')}">✕</button>` : ''}</div>`).join('') : `<p class="sub">${t('cn_empty')}</p>`}</div>`;
   $('#cnadd').onclick = async () => {
     const text = $('#cntext').value.trim(); if (!text) { $('#cnmsg').textContent = t('cn_need'); return; }
-    try { state.counsel = (await api(`/api/students/${sid}/counsel`, { method: 'POST', body: { text, date: $('#cndate').value } })).counsel; render(); } catch (e) { $('#cnmsg').textContent = e.message; }
+    const actions = $('#cnactions').value.split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 5), next = $('#cnnext').value;
+    try {
+      state.counsel = (await api(`/api/students/${sid}/counsel`, { method: 'POST', body: { text, date: $('#cndate').value, topic: $('#cntopic').value, next, actions } })).counsel;
+      if (next !== (state.profile.nextSession || '')) { state.profile.nextSession = next; save('profile'); }
+      if ($('#cnsend').checked && actions.length) { actions.forEach((a) => { if (!state.tasks.some((x) => x.text === a.slice(0, 80))) state.tasks.push({ text: a.slice(0, 80), done: false }); }); save('tasks'); }
+      render();
+    } catch (e) { $('#cnmsg').textContent = e.message; }
   };
   app.querySelectorAll('[data-cdel]').forEach((b) => (b.onclick = async () => { try { state.counsel = (await api(`/api/students/${sid}/counsel/${b.dataset.cdel}`, { method: 'DELETE' })).counsel; render(); } catch (e) { $('#cnmsg').textContent = e.message; } }));
 }
