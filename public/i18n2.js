@@ -304,3 +304,17 @@ Object.assign(UI.vi, {
   beta_note: 'Đang chạy thử (beta). Nếu có điều bất tiện, hãy bấm nút 💬 ở góc dưới bên trái (trên điện thoại ở phía trên).',
   bk_title: 'Sao lưu dữ liệu', bk_help: 'Tải toàn bộ dữ liệu học viên và tài khoản thành một tệp. Tệp chứa mật khẩu (đã mã hóa) và thông tin cá nhân nên chỉ giữ ở nơi an toàn; hãy tải ít nhất mỗi tuần một lần.', bk_btn: 'Tải tệp sao lưu', bk_done: 'Đã tải xuống. Hãy lưu ở nơi an toàn.',
 });
+
+// 처음 화면(랜딩)·로그인 화면
+Object.assign(UI.ko, {
+  auth_tab_login: '로그인', auth_tab_signup: '회원가입', auth_tab_claim: '활성화 코드', auth_forgot: '비밀번호를 잊었어요', auth_staff_note: '강사·관리자 계정은 기관에서 만들어 드려요. 받은 이메일과 비밀번호로 로그인하세요.',
+  land_tagline: '진로 탐색과 학습 관리를 한곳에서. 검사 · 목표 · 시간표 · 상담 · 리포트까지 함께해요.', land_b1: '6가지 종합검사로 나의 흥미·성향·역량을 알아봐요', land_b2: '목표와 시간표, 주간 계획으로 꾸준히 학습해요', land_b3: '선생님과 보호자가 진행 상황을 함께 확인해요',
+  land_claim_q: '선생님이 나를 등록해 주셨나요?', land_l_t: '학생·성인 학습자', land_l_d: '회원가입 후 검사를 하고 목표와 시간표를 관리해요. 초등학생부터 성인까지 눈높이에 맞게 보여 드려요.', land_s_t: '강사·학원·스터디카페', land_s_d: '학생 등록, 반·출결, 입퇴실, 상담 기록, 학부모 리포트를 관리해요. 계정은 기관 관리자가 만들어 줘요.',
+  land_p_t: '학부모', land_p_d: '선생님이 보내 준 링크를 열면 로그인 없이 자녀의 학습 리포트를 볼 수 있어요.', land_trial_t: '먼저 둘러보고 싶어요', land_trial_d: '가입 없이 체험해 볼 수 있어요. 입력한 내용은 이 기기에만 저장돼요.', land_trial: '가입 없이 체험하기',
+});
+Object.assign(UI.vi, {
+  auth_tab_login: 'Đăng nhập', auth_tab_signup: 'Đăng ký', auth_tab_claim: 'Mã kích hoạt', auth_forgot: 'Quên mật khẩu', auth_staff_note: 'Tài khoản giáo viên/quản trị viên do đơn vị tạo. Hãy đăng nhập bằng email và mật khẩu đã nhận.',
+  land_tagline: 'Hướng nghiệp và quản lý học tập ở một nơi. Kiểm tra · mục tiêu · thời khóa biểu · tư vấn · báo cáo.', land_b1: 'Khám phá sở thích, tính cách, năng lực qua 6 bài kiểm tra tổng hợp', land_b2: 'Học đều đặn với mục tiêu, thời khóa biểu và kế hoạch tuần', land_b3: 'Giáo viên và phụ huynh cùng theo dõi tiến độ',
+  land_claim_q: 'Giáo viên đã đăng ký cho bạn?', land_l_t: 'Học viên · Người lớn', land_l_d: 'Đăng ký rồi làm bài kiểm tra, quản lý mục tiêu và thời khóa biểu. Nội dung phù hợp từ tiểu học đến người lớn.', land_s_t: 'Giáo viên · Trung tâm · Quán học tập', land_s_d: 'Quản lý đăng ký học viên, lớp và điểm danh, vào/ra, ghi chép tư vấn, báo cáo phụ huynh. Tài khoản do quản trị viên đơn vị tạo.',
+  land_p_t: 'Phụ huynh', land_p_d: 'Mở liên kết giáo viên gửi để xem báo cáo học tập của con mà không cần đăng nhập.', land_trial_t: 'Tôi muốn xem thử trước', land_trial_d: 'Dùng thử không cần đăng ký. Nội dung nhập chỉ lưu trên thiết bị này.', land_trial: 'Dùng thử không đăng ký',
+});

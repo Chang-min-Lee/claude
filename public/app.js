@@ -188,7 +188,7 @@ function render() {
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
-  if (onboarding) { state.tab === 'account' ? renderAccount(app) : renderOnboarding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
+  if (onboarding) { state.tab === 'account' ? renderAccount(app) : (state.trial || PREVIEW) ? renderOnboarding(app) : renderLanding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());
   app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); };
@@ -202,15 +202,28 @@ function render() {
   }
 }
 
+// 처음 화면: 무엇을 하는 곳인지 + 로그인/회원가입/활성화 코드/체험 진입
+function renderLanding(app) {
+  const go = (mode) => () => { state.authMode = mode; state.tab = 'account'; render(); };
+  app.innerHTML = `<div class="card landing"><h1>${esc(orgName())}</h1><p class="lead">${t('land_tagline')}</p>
+      <ul class="landlist"><li>🧭 ${t('land_b1')}</li><li>📚 ${t('land_b2')}</li><li>👨‍👩‍👧 ${t('land_b3')}</li></ul>
+      <div class="actions"><button class="primary" id="lg">${t('auth_tab_login')}</button><button class="primary" id="lsg">${t('auth_tab_signup')}</button></div>
+      <p class="sub" style="margin-top:14px">${t('land_claim_q')} <button id="lcl">${t('auth_tab_claim')}</button></p></div>
+    <div class="grid2"><div class="card"><h2>${t('land_l_t')}</h2><p class="sub">${t('land_l_d')}</p></div><div class="card"><h2>${t('land_s_t')}</h2><p class="sub">${t('land_s_d')}</p></div></div>
+    <div class="card"><h2>${t('land_p_t')}</h2><p class="sub">${t('land_p_d')}</p></div>
+    <div class="card"><h2>${t('land_trial_t')}</h2><p class="sub">${t('land_trial_d')}</p><button id="ltrial">${t('land_trial')}</button></div>`;
+  $('#lg').onclick = go('login'); $('#lsg').onclick = go('signup'); $('#lcl').onclick = go('claim');
+  $('#ltrial').onclick = () => { state.trial = true; render(); };
+}
 function renderOnboarding(app) {
-  app.innerHTML = `<div class="card"><h2>${t('onb_hello')}</h2>
+  app.innerHTML = `${PREVIEW ? '' : `<button id="backland">${t('btn_back')}</button>`}<div class="card"><h2>${t('onb_hello')}</h2>
     <p class="sub">${t('onb_intro')}</p>
     <label>${t('onb_name')}<input type="text" id="name" maxlength="20" placeholder="${t('onb_name_ph')}"></label><br><br>
     <label>${t('onb_iam')}<select id="group">${Object.keys(GROUPS).map((k) => `<option value="${k}">${groupLabel(k)}</option>`).join('')}</select></label><br><br>
     <button class="primary" id="start">${t('onb_start')}</button>
     <p class="sub">${t('onb_local_note')}</p>
     ${PREVIEW ? '' : `<p>${t('onb_have_account')} <button id="tologin">${t('onb_login_signup')}</button></p>`}</div>`;
-  if (!PREVIEW) $('#tologin').onclick = () => { state.tab = 'account'; render(); };
+  if (!PREVIEW) { $('#tologin').onclick = () => { state.tab = 'account'; state.authMode = 'login'; render(); }; $('#backland').onclick = () => { state.trial = false; render(); }; }
   $('#start').onclick = () => {
     state.profile = { name: $('#name').value.trim() || t('friend'), group: $('#group').value, services: { study: true, career: true }, school: '', note: '', teacherNote: '' };
     save('profile'); render();
@@ -403,28 +416,35 @@ function renderAccount(app) {
     }
     return;
   }
-  app.innerHTML = `${state.profile ? '' : `<button id="back">${t('btn_back')}</button>`}
-    <div class="card"><h2>${t('login_title')}</h2><input type="text" id="lemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="${t('pw_ph')}" autocomplete="current-password"></div><button class="primary" id="login">${t('btn_login')}</button></div>
-    <div class="card"><h2>${t('signup_title')}</h2>
+  const mode = state.authMode || 'login';
+  const tabsHtml = ['login', 'signup', 'claim'].map((k) => `<button data-am="${k}" class="${mode === k || (mode === 'reset' && k === 'login') ? 'on' : ''}">${t('auth_tab_' + k)}</button>`).join('');
+  const forms = {
+    login: `<div class="card"><h2>${t('login_title')}</h2><input type="text" id="lemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="${t('pw_ph')}" autocomplete="current-password"></div><button class="primary" id="login">${t('btn_login')}</button> <button data-am="reset" class="sub">${t('auth_forgot')}</button><p class="sub">${t('auth_staff_note')}</p></div>`,
+    signup: `<div class="card"><h2>${t('signup_title')}</h2>
       <input type="text" id="sname" maxlength="20" placeholder="${t('name_ph')}"><div class="row"><input type="text" id="semail" placeholder="${t('email_ph')}"></div>
       <div class="row"><input type="password" id="spw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div>
       <div class="row"><select id="srole"><option value="learner">${t('role_opt_learner')}</option><option value="guardian">${t('role_opt_guardian')}</option></select></div>
       <label class="row"><input type="checkbox" id="sagree" style="flex:none;width:20px"> <span class="sub">${t('agree_label')} (<a href="?legal=privacy" target="_blank" rel="noopener">${t('agree_link')}</a>)</span></label>
       <button class="primary" id="signup">${t('btn_signup')}</button>
-      <p class="sub">${t('minor_note')}</p></div>
-    <div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
+      <p class="sub">${t('minor_note')}</p></div>`,
+    claim: `<div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
       <input type="text" id="ccode" maxlength="8" placeholder="${t('claim_code_ph')}"><div class="row"><input type="text" id="cemail" placeholder="${t('email_ph')}"></div>
-      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="claim">${t('claim_btn')}</button></div>
-    <div class="card"><h2>${t('reset_title')}</h2><p class="sub">${t('reset_desc')}</p>
+      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button class="primary" id="claim">${t('claim_btn')}</button></div>`,
+    reset: `<div class="card"><h2>${t('reset_title')}</h2><p class="sub">${t('reset_desc')}</p>
       <input type="text" id="rsemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="text" id="rscode" maxlength="8" placeholder="${t('reset_code_ph')}"></div>
-      <div class="row"><input type="password" id="rspw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="rsgo">${t('reset_btn')}</button></div><p class="sub" id="amsg"></p>`;
-  if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; render(); };
+      <div class="row"><input type="password" id="rspw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button class="primary" id="rsgo">${t('reset_btn')}</button></div>`,
+  };
+  app.innerHTML = `${state.profile ? '' : `<button id="back">${t('btn_back')}</button>`}
+    <div class="subnav">${tabsHtml}</div>${forms[mode]}<p class="sub" id="amsg"></p>`;
+  app.querySelectorAll('[data-am]').forEach((b) => (b.onclick = () => { state.authMode = b.dataset.am; render(); }));
+  if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; state.trial = false; state.authMode = 'login'; render(); };
   const go = (path, body) => async () => {
     $('#amsg').textContent = t('processing');
     try { await afterAuth(await api(path, { method: 'POST', body: body() })); render(); } catch (e) { $('#amsg').textContent = e.message; }
   };
-  $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
-  $('#signup').onclick = () => { if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
-  $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
-  $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));
+  if ($('#login')) $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
+  if ($('#signup')) $('#signup').onclick = () => { if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
+  if ($('#claim')) $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
+  if ($('#rsgo')) $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));
+  app.querySelectorAll('input').forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = app.querySelector('.card .primary'); if (b) b.click(); } })); // Enter 로 제출
 }
