@@ -6,9 +6,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 
-let server, mock, base, dataDir, mockReplies = [];
+let server, mock, base, dataDir, mockReplies = [], lastAiBody = null;
 
-const post = (p, body, token, method = 'POST') => fetch(base + p, { method, headers: { 'content-type': 'application/json', ...(token && { authorization: 'Bearer ' + token }) }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
+const post = (p, body, token, method = 'POST', lang) => fetch(base + p, { method, headers: { 'content-type': 'application/json', ...(lang && { 'x-lang': lang }), ...(token && { authorization: 'Bearer ' + token }) }, body: JSON.stringify(body) }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
 const get = (p, token) => fetch(base + p, { headers: token ? { authorization: 'Bearer ' + token } : {} }).then(async (r) => ({ status: r.status, ...(await r.json()) }));
 
 async function start(env) {
@@ -22,7 +22,7 @@ async function start(env) {
 
 before(async () => {
   mock = http.createServer((req, res) => { // 가짜 Anthropic API
-    req.resume(); req.on('end', () => { res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: mockReplies.shift() || 'ok' }] })); });
+    let raw = ''; req.on('data', (c) => (raw += c)); req.on('end', () => { try { lastAiBody = JSON.parse(raw); } catch {} res.writeHead(200, { 'content-type': 'application/json' }); res.end(JSON.stringify({ content: [{ type: 'text', text: mockReplies.shift() || 'ok' }] })); });
   });
   await new Promise((r) => mock.listen(0, r));
   await start({ ANTHROPIC_API_KEY: 'test', ANTHROPIC_BASE_URL: `http://localhost:${mock.address().port}` });
@@ -98,4 +98,28 @@ test('비밀번호 변경·내보내기·계정 삭제·보안 헤더', async ()
   assert.equal((await post('/api/login', { email: 'del@b.co', password: 'newpassword1' })).status, 401);
   assert.equal((await get('/api/dashboard', g.token)).learners.length, 0);
   const h = await fetch(base + '/'); assert.match(h.headers.get('content-security-policy'), /default-src 'self'/); assert.equal(h.headers.get('x-content-type-options'), 'nosniff');
+});
+
+test('베트남어: 오류 메시지·AI 프롬프트·기본 계획', async () => {
+  server.kill(); await new Promise((r) => setTimeout(r, 200)); // 이전 테스트가 키 없는 서버로 바꿔 두었으므로 목 API 연결 상태로 재시작
+  await start({ ANTHROPIC_API_KEY: 'test', ANTHROPIC_BASE_URL: `http://localhost:${mock.address().port}` });
+  const bad = await post('/api/login', { email: 'no@b.co', password: 'password1' }, null, 'POST', 'vi');
+  assert.equal(bad.status, 401); assert.match(bad.error, /Email hoặc mật khẩu/);
+  assert.match((await post('/api/login', { email: 'no@b.co', password: 'x' })).error, /이메일 또는 비밀번호/); // 기본은 한국어
+  assert.match((await post('/api/login', { email: 'no@b.co', password: 'x' }, null, 'POST', 'fr')).error, /이메일/); // 미지원 언어는 한국어
+  mockReplies = ['Xin chào!'];
+  await post('/api/chat', { messages: [{ role: 'user', content: 'chào' }], profile: { name: 'Lan', group: 'high' } }, null, 'POST', 'vi');
+  assert.match(lastAiBody.system, /tiếng Việt/); assert.match(lastAiBody.system, /THPT/);
+  mockReplies = ['{"questions":[{"q":"a","choices":["1","2","3","4"],"answer":0,"explain":"x"}]}'];
+  await post('/api/quiz', { subject: 'Toán', group: 'middle' }, null, 'POST', 'vi');
+  assert.match(lastAiBody.messages[0].content, /trắc nghiệm/); assert.match(lastAiBody.system, /THCS/);
+  mockReplies = ['{"tasks":[]}'];
+  const p = await post('/api/plan', { goal: 'x', weeks: 1 }, null, 'POST', 'vi');
+  assert.equal(p.status, 502); assert.match(p.error, /kế hoạch/);
+  server.kill(); await new Promise((r) => setTimeout(r, 200));
+  await start({ ANTHROPIC_API_KEY: '' });
+  const plan = await post('/api/plan', { goal: 'Toán', weeks: 2, hours: 3 }, null, 'POST', 'vi');
+  assert.match(plan.tasks[0].text, /giờ\/tuần/);
+  assert.match((await post('/api/quiz', { subject: 'Toán' }, null, 'POST', 'vi')).error, /ANTHROPIC_API_KEY/);
+  assert.match((await post('/api/chat', { messages: [{ role: 'user', content: 'x' }] }, null, 'POST', 'vi')).reply, /Để dùng AI/);
 });

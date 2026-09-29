@@ -36,22 +36,49 @@ const checkPw = (u, pw) => crypto.timingSafeEqual(Buffer.from(hashPw(String(pw |
 function dropSessions(userId) { for (const [k, v] of Object.entries(db.sessions)) if (v.userId === userId) delete db.sessions[k]; }
 const userByEmail = (email) => Object.values(db.users).find((u) => u.email === email);
 
-class HttpError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
+
+// ---------- 다국어 (요청의 X-Lang 헤더: ko | vi) ----------
+const LANGS = ['ko', 'vi'];
+const langOf = (req) => { const l = String(req.headers['x-lang'] || '').slice(0, 2).toLowerCase(); return LANGS.includes(l) ? l : 'ko'; };
+const M = {
+  ko: {
+    tooMany: '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.', tooLarge: '요청이 너무 큽니다.', badReq: '잘못된 요청입니다.', needLogin: '로그인이 필요해요.',
+    aiConnect: 'AI 서버에 연결하지 못했습니다.', aiFail: 'AI 호출 실패', aiParse: 'AI 응답을 해석하지 못했어요. 다시 시도해 주세요.',
+    goalReq: '목표를 입력해 주세요.', planFail: 'AI가 계획을 만들지 못했어요. 다시 시도해 주세요.', subjectReq: '과목/주제를 입력해 주세요.',
+    quizNeedKey: '퀴즈는 AI 기능이라 서버에 ANTHROPIC_API_KEY 설정이 필요해요.', quizFail: '퀴즈를 만들지 못했어요. 다시 시도해 주세요.',
+    badEmail: '올바른 이메일을 입력해 주세요.', pwShort: '비밀번호는 8자 이상이어야 해요.', nameReq: '이름을 입력해 주세요.', emailTaken: '이미 가입된 이메일이에요.', badCred: '이메일 또는 비밀번호가 맞지 않아요.',
+    learnerOnly: '학습자 계정만 저장할 수 있어요.', guardianOnlyLink: '보호자/교사 계정만 연결할 수 있어요.', codeNotFound: '연결 코드를 찾을 수 없어요.', guardianOnly: '보호자/교사 전용이에요.',
+    curPwBad: '현재 비밀번호가 맞지 않아요.', newPwShort: '새 비밀번호는 8자 이상이어야 해요.', pwBad: '비밀번호가 맞지 않아요.', msgReq: '메시지가 필요합니다.', serverErr: '서버 오류가 발생했어요.',
+    noKeyChat: 'AI 코치를 쓰려면 서버에 ANTHROPIC_API_KEY 환경변수를 설정해 주세요. (진로검사·학습관리는 키 없이도 사용할 수 있어요.)',
+  },
+  vi: {
+    tooMany: 'Quá nhiều yêu cầu. Vui lòng thử lại sau.', tooLarge: 'Yêu cầu quá lớn.', badReq: 'Yêu cầu không hợp lệ.', needLogin: 'Bạn cần đăng nhập.',
+    aiConnect: 'Không kết nối được máy chủ AI.', aiFail: 'Gọi AI thất bại.', aiParse: 'Không đọc được phản hồi của AI. Vui lòng thử lại.',
+    goalReq: 'Vui lòng nhập mục tiêu.', planFail: 'AI chưa tạo được kế hoạch. Vui lòng thử lại.', subjectReq: 'Vui lòng nhập môn học/chủ đề.',
+    quizNeedKey: 'Trắc nghiệm là tính năng AI nên máy chủ cần cài đặt ANTHROPIC_API_KEY.', quizFail: 'Chưa tạo được câu hỏi. Vui lòng thử lại.',
+    badEmail: 'Vui lòng nhập email hợp lệ.', pwShort: 'Mật khẩu phải có ít nhất 8 ký tự.', nameReq: 'Vui lòng nhập tên.', emailTaken: 'Email này đã được đăng ký.', badCred: 'Email hoặc mật khẩu không đúng.',
+    learnerOnly: 'Chỉ tài khoản người học mới có thể lưu dữ liệu.', guardianOnlyLink: 'Chỉ tài khoản phụ huynh/giáo viên mới có thể kết nối.', codeNotFound: 'Không tìm thấy mã kết nối.', guardianOnly: 'Chỉ dành cho phụ huynh/giáo viên.',
+    curPwBad: 'Mật khẩu hiện tại không đúng.', newPwShort: 'Mật khẩu mới phải có ít nhất 8 ký tự.', pwBad: 'Mật khẩu không đúng.', msgReq: 'Cần có tin nhắn.', serverErr: 'Đã xảy ra lỗi máy chủ.',
+    noKeyChat: 'Để dùng AI, hãy cài biến môi trường ANTHROPIC_API_KEY trên máy chủ. (Trắc nghiệm sở thích và quản lý học tập vẫn dùng được khi không có khóa.)',
+  },
+};
+
+class HttpError extends Error { constructor(code, key, raw) { super(raw || key); this.code = code; this.key = key; this.raw = raw; } }
 
 // 단순 메모리 속도 제한 (무차별 대입·AI 비용 남용 방지)
 const hits = new Map();
 function limit(key, max, windowMs) {
   const now = Date.now();
   const arr = (hits.get(key) || []).filter((t) => now - t < windowMs);
-  if (arr.length >= max) throw new HttpError(429, '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.');
+  if (arr.length >= max) throw new HttpError(429, 'tooMany');
   arr.push(now); hits.set(key, arr);
 }
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
     let data = '';
-    req.on('data', (c) => { data += c; if (data.length > 1e6) { req.destroy(); reject(new HttpError(413, '요청이 너무 큽니다.')); } });
-    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { reject(new HttpError(400, '잘못된 요청입니다.')); } });
+    req.on('data', (c) => { data += c; if (data.length > 1e6) { req.destroy(); reject(new HttpError(413, 'tooLarge')); } });
+    req.on('end', () => { try { resolve(JSON.parse(data || '{}')); } catch { reject(new HttpError(400, 'badReq')); } });
   });
 }
 
@@ -61,7 +88,7 @@ function authUser(req) {
   if (!s || s.exp < Date.now()) return null;
   return db.users[s.userId] || null;
 }
-const needUser = (req) => authUser(req) || (() => { throw new HttpError(401, '로그인이 필요해요.'); })();
+const needUser = (req) => authUser(req) || (() => { throw new HttpError(401, 'needLogin'); })();
 
 function issueToken(userId) {
   const token = crypto.randomBytes(32).toString('hex');
@@ -74,23 +101,38 @@ const publicUser = (u) => ({ id: u.id, name: u.name, role: u.role, shareCode: u.
 
 // ---------- Claude ----------
 const STYLE = {
-  elementary: '초등학생에게 말하듯 쉬운 낱말과 짧은 문장으로, 친근하고 칭찬을 많이 하며 이모지를 조금 사용하세요.',
-  middle: '중학생 눈높이로 친근하게, 구체적인 예시를 들어 설명하세요.',
-  high: '고등학생에게 입시·전공 선택·진로 준비를 현실적으로 안내하세요.',
-  college: '대학생에게 전공 활용, 인턴·자격증·포트폴리오 등 취업 준비를 구체적으로 안내하세요.',
-  adult: '성인 학습자/직장인에게 커리어 전환, 재교육, 자기계발을 존중하는 어조로 실용적으로 안내하세요.',
+  ko: {
+    elementary: '초등학생에게 말하듯 쉬운 낱말과 짧은 문장으로, 친근하고 칭찬을 많이 하며 이모지를 조금 사용하세요.',
+    middle: '중학생 눈높이로 친근하게, 구체적인 예시를 들어 설명하세요.',
+    high: '고등학생에게 입시·전공 선택·진로 준비를 현실적으로 안내하세요.',
+    college: '대학생에게 전공 활용, 인턴·자격증·포트폴리오 등 취업 준비를 구체적으로 안내하세요.',
+    adult: '성인 학습자/직장인에게 커리어 전환, 재교육, 자기계발을 존중하는 어조로 실용적으로 안내하세요.',
+  },
+  vi: {
+    elementary: 'Hãy nói với học sinh tiểu học bằng từ ngữ dễ hiểu, câu ngắn, thân thiện, khen ngợi nhiều và dùng ít biểu tượng cảm xúc. Xưng hô "cô/thầy – em" hoặc "mình – bạn" cho tự nhiên.',
+    middle: 'Hãy giải thích thân thiện theo tầm nhìn của học sinh THCS, có ví dụ cụ thể (ví dụ: lựa chọn sau lớp 9 giữa THPT và giáo dục nghề nghiệp).',
+    high: 'Hãy hướng dẫn học sinh THPT một cách thực tế về chọn ngành, tổ hợp môn xét tuyển, kỳ thi tốt nghiệp THPT và chuẩn bị nghề nghiệp.',
+    college: 'Hãy hướng dẫn sinh viên cụ thể về tận dụng chuyên ngành, thực tập, chứng chỉ, hồ sơ năng lực để chuẩn bị đi làm.',
+    adult: 'Hãy hướng dẫn người đi làm/người học lớn tuổi một cách tôn trọng và thực tế về chuyển nghề, học lại và phát triển bản thân.',
+  },
 };
-const LEVEL = { elementary: '초등학생', middle: '중학생', high: '고등학생', college: '대학생', adult: '성인 학습자' };
+const LEVEL = {
+  ko: { elementary: '초등학생', middle: '중학생', high: '고등학생', college: '대학생', adult: '성인 학습자' },
+  vi: { elementary: 'học sinh tiểu học', middle: 'học sinh THCS', high: 'học sinh THPT', college: 'sinh viên', adult: 'người học trưởng thành' },
+};
 
-function systemPrompt({ name, group, riasec, tasks } = {}) {
+function systemPrompt({ name, group, riasec, tasks } = {}, lang = 'ko') {
+  const ko = lang === 'ko';
   return [
-    '당신은 진로탐색과 학습관리를 돕는 AI 코치입니다. 한국어로 답합니다.',
-    STYLE[group] || STYLE.adult,
-    name ? `사용자 이름: ${String(name).slice(0, 20)}` : '',
-    riasec ? `진로 흥미검사(RIASEC) 상위 유형: ${String(riasec).slice(0, 60)}` : '',
-    tasks ? `현재 학습 목표/할 일: ${String(tasks).slice(0, 600)}` : '',
-    '원칙: 정답을 강요하지 말고 질문을 통해 스스로 탐색하도록 돕고, 다음에 할 수 있는 작은 행동 1~3가지를 제안하세요.',
-    '의학·법률·재정 등 전문 영역은 단정하지 말고 전문가 상담을 권하세요. 답변은 간결하게(최대 10문장 안팎).',
+    ko ? '당신은 진로탐색과 학습관리를 돕는 AI 코치입니다. 한국어로 답합니다.' : 'Bạn là huấn luyện viên AI giúp hướng nghiệp và quản lý học tập. Luôn trả lời bằng tiếng Việt.',
+    STYLE[lang][group] || STYLE[lang].adult,
+    name ? `${ko ? '사용자 이름' : 'Tên người dùng'}: ${String(name).slice(0, 20)}` : '',
+    riasec ? `${ko ? '진로 흥미검사(RIASEC) 상위 유형' : 'Nhóm sở thích nghề nghiệp (RIASEC) nổi bật'}: ${String(riasec).slice(0, 60)}` : '',
+    tasks ? `${ko ? '현재 학습 목표/할 일' : 'Mục tiêu/việc đang làm'}: ${String(tasks).slice(0, 600)}` : '',
+    ko ? '원칙: 정답을 강요하지 말고 질문을 통해 스스로 탐색하도록 돕고, 다음에 할 수 있는 작은 행동 1~3가지를 제안하세요.'
+      : 'Nguyên tắc: không áp đặt đáp án; hãy đặt câu hỏi để người dùng tự khám phá và gợi ý 1–3 hành động nhỏ tiếp theo.',
+    ko ? '의학·법률·재정 등 전문 영역은 단정하지 말고 전문가 상담을 권하세요. 답변은 간결하게(최대 10문장 안팎).'
+      : 'Với lĩnh vực y tế, pháp lý, tài chính, đừng khẳng định chắc chắn mà khuyên tham khảo chuyên gia. Trả lời ngắn gọn (tối đa khoảng 10 câu).',
   ].filter(Boolean).join('\n');
 }
 
@@ -104,60 +146,67 @@ async function callClaude(system, messages, maxTokens = 1024) {
       headers: { 'content-type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({ model: MODEL, max_tokens: maxTokens, system, messages }),
     });
-  } catch { throw new HttpError(502, 'AI 서버에 연결하지 못했습니다.'); }
+  } catch { throw new HttpError(502, 'aiConnect'); }
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw new HttpError(502, j.error?.message || 'AI 호출 실패');
+  if (!r.ok) throw new HttpError(502, 'aiFail', j.error?.message);
   return j.content.map((c) => c.text || '').join('');
 }
 
 function extractJson(text) {
   const m = text && text.match(/\{[\s\S]*\}/);
-  if (!m) throw new HttpError(502, 'AI 응답을 해석하지 못했어요. 다시 시도해 주세요.');
-  try { return JSON.parse(m[0]); } catch { throw new HttpError(502, 'AI 응답을 해석하지 못했어요. 다시 시도해 주세요.'); }
+  if (!m) throw new HttpError(502, 'aiParse');
+  try { return JSON.parse(m[0]); } catch { throw new HttpError(502, 'aiParse'); }
 }
 const clampInt = (v, lo, hi, d) => { const n = parseInt(v, 10); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d; };
 const str = (v, max) => String(v ?? '').trim().slice(0, max);
 
 // ---------- 학습 계획 ----------
-function fallbackPlan(goal, weeks, hours) {
-  const steps = ['현재 수준 점검과 학습 자료 정하기', '핵심 개념 익히기', '문제/실습으로 적용하기', '틀린 부분 복습·정리하기', '실전 점검 및 다음 목표 세우기'];
+const PLAN_STEPS = {
+  ko: ['현재 수준 점검과 학습 자료 정하기', '핵심 개념 익히기', '문제/실습으로 적용하기', '틀린 부분 복습·정리하기', '실전 점검 및 다음 목표 세우기'],
+  vi: ['Đánh giá trình độ hiện tại và chọn tài liệu học', 'Nắm vững khái niệm cốt lõi', 'Áp dụng qua bài tập/thực hành', 'Ôn lại và tổng hợp phần làm sai', 'Kiểm tra thực tế và đặt mục tiêu tiếp theo'],
+};
+function fallbackPlan(goal, weeks, hours, lang) {
+  const steps = PLAN_STEPS[lang];
+  const perWeek = lang === 'vi' ? `${hours} giờ/tuần` : `주 ${hours}시간`;
   const tasks = [];
-  for (let w = 1; w <= weeks; w++) tasks.push({ week: w, text: `${goal} — ${steps[Math.min(steps.length - 1, Math.floor(((w - 1) / weeks) * steps.length))]} (주 ${hours}시간)` });
+  for (let w = 1; w <= weeks; w++) tasks.push({ week: w, text: `${goal} — ${steps[Math.min(steps.length - 1, Math.floor(((w - 1) / weeks) * steps.length))]} (${perWeek})` });
   return tasks;
 }
 
-async function makePlan(body) {
+async function makePlan(body, lang) {
   const goal = str(body.goal, 100);
-  if (!goal) throw new HttpError(400, '목표를 입력해 주세요.');
+  if (!goal) throw new HttpError(400, 'goalReq');
   const weeks = clampInt(body.weeks, 1, 12, 4);
   const hours = clampInt(body.hours, 1, 40, 5);
-  const group = LEVEL[body.group] ? body.group : 'adult';
-  const text = await callClaude(
-    `당신은 ${LEVEL[group]} 학습 계획 전문가입니다. 반드시 JSON만 출력하세요.`,
-    [{ role: 'user', content: `목표: ${goal}\n기간: ${weeks}주, 주당 ${hours}시간.\n주차별로 1~3개의 구체적이고 확인 가능한 할 일을 만들어 다음 형식으로만 답하세요: {"tasks":[{"week":1,"text":"..."}]} (text는 60자 이내, 한국어)` }],
-    1500);
-  if (text === null) return { tasks: fallbackPlan(goal, weeks, hours), ai: false };
+  const group = LEVEL.ko[body.group] ? body.group : 'adult';
+  const level = LEVEL[lang][group];
+  const [sys, user] = lang === 'vi'
+    ? [`Bạn là chuyên gia lập kế hoạch học tập cho ${level}. Chỉ trả về JSON.`, `Mục tiêu: ${goal}\nThời gian: ${weeks} tuần, mỗi tuần ${hours} giờ.\nHãy chia thành 1–3 việc cụ thể, kiểm tra được cho mỗi tuần và chỉ trả lời theo định dạng: {"tasks":[{"week":1,"text":"..."}]} (text tối đa 60 ký tự, tiếng Việt)`]
+    : [`당신은 ${level} 학습 계획 전문가입니다. 반드시 JSON만 출력하세요.`, `목표: ${goal}\n기간: ${weeks}주, 주당 ${hours}시간.\n주차별로 1~3개의 구체적이고 확인 가능한 할 일을 만들어 다음 형식으로만 답하세요: {"tasks":[{"week":1,"text":"..."}]} (text는 60자 이내, 한국어)`];
+  const text = await callClaude(sys, [{ role: 'user', content: user }], 1500);
+  if (text === null) return { tasks: fallbackPlan(goal, weeks, hours, lang), ai: false };
   const tasks = (extractJson(text).tasks || []).slice(0, 36)
     .map((t) => ({ week: clampInt(t.week, 1, weeks, 1), text: str(t.text, 80) })).filter((t) => t.text);
-  if (!tasks.length) throw new HttpError(502, 'AI가 계획을 만들지 못했어요. 다시 시도해 주세요.');
+  if (!tasks.length) throw new HttpError(502, 'planFail');
   return { tasks, ai: true };
 }
 
 // ---------- 퀴즈 ----------
-async function makeQuiz(body) {
+async function makeQuiz(body, lang) {
   const subject = str(body.subject, 40);
-  if (!subject) throw new HttpError(400, '과목/주제를 입력해 주세요.');
+  if (!subject) throw new HttpError(400, 'subjectReq');
   const count = clampInt(body.count, 3, 10, 5);
-  const group = LEVEL[body.group] ? body.group : 'adult';
-  const text = await callClaude(
-    `당신은 ${LEVEL[group]} 수준의 퀴즈 출제자입니다. 정확한 사실만 출제하고 반드시 JSON만 출력하세요.`,
-    [{ role: 'user', content: `주제: ${subject}\n객관식(4지선다) ${count}문제를 다음 형식으로만 답하세요: {"questions":[{"q":"...","choices":["","","",""],"answer":0,"explain":"한두 문장 해설"}]} (answer는 0~3 정답 인덱스)` }],
-    3000);
-  if (text === null) throw new HttpError(503, '퀴즈는 AI 기능이라 서버에 ANTHROPIC_API_KEY 설정이 필요해요.');
+  const group = LEVEL.ko[body.group] ? body.group : 'adult';
+  const level = LEVEL[lang][group];
+  const [sys, user] = lang === 'vi'
+    ? [`Bạn là người ra đề trắc nghiệm mức ${level}. Chỉ ra đề với kiến thức chính xác và chỉ trả về JSON.`, `Chủ đề: ${subject}\nTạo ${count} câu trắc nghiệm 4 lựa chọn, chỉ trả lời theo định dạng: {"questions":[{"q":"...","choices":["","","",""],"answer":0,"explain":"giải thích 1–2 câu"}]} (answer là chỉ số 0–3 của đáp án đúng; viết bằng tiếng Việt)`]
+    : [`당신은 ${level} 수준의 퀴즈 출제자입니다. 정확한 사실만 출제하고 반드시 JSON만 출력하세요.`, `주제: ${subject}\n객관식(4지선다) ${count}문제를 다음 형식으로만 답하세요: {"questions":[{"q":"...","choices":["","","",""],"answer":0,"explain":"한두 문장 해설"}]} (answer는 0~3 정답 인덱스)`];
+  const text = await callClaude(sys, [{ role: 'user', content: user }], 3000);
+  if (text === null) throw new HttpError(503, 'quizNeedKey');
   const questions = (extractJson(text).questions || []).slice(0, count).map((q) => ({
     q: str(q.q, 300), choices: (q.choices || []).slice(0, 4).map((c) => str(c, 120)), answer: clampInt(q.answer, 0, 3, -1), explain: str(q.explain, 300),
   })).filter((q) => q.q && q.choices.length === 4 && q.answer >= 0);
-  if (!questions.length) throw new HttpError(502, '퀴즈를 만들지 못했어요. 다시 시도해 주세요.');
+  if (!questions.length) throw new HttpError(502, 'quizFail');
   return { questions };
 }
 
@@ -191,10 +240,10 @@ const routes = {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const b = await readBody(req);
     const email = str(b.email, 100).toLowerCase(), password = String(b.password || ''), name = str(b.name, 20);
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, '올바른 이메일을 입력해 주세요.');
-    if (password.length < 8) throw new HttpError(400, '비밀번호는 8자 이상이어야 해요.');
-    if (!name) throw new HttpError(400, '이름을 입력해 주세요.');
-    if (userByEmail(email)) throw new HttpError(409, '이미 가입된 이메일이에요.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(400, 'badEmail');
+    if (password.length < 8) throw new HttpError(400, 'pwShort');
+    if (!name) throw new HttpError(400, 'nameReq');
+    if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
     const role = b.role === 'guardian' ? 'guardian' : 'learner';
     const salt = crypto.randomBytes(16).toString('hex');
     const u = { id: crypto.randomUUID(), email, name, role, salt, hash: hashPw(password, salt), data: {}, links: [], shareCode: newCode() };
@@ -206,7 +255,7 @@ const routes = {
     const b = await readBody(req);
     const u = userByEmail(str(b.email, 100).toLowerCase());
     const ok = u && checkPw(u, b.password);
-    if (!ok) throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않아요.');
+    if (!ok) throw new HttpError(401, 'badCred');
     return { token: issueToken(u.id), user: publicUser(u) };
   },
   'POST /api/logout': async (req) => {
@@ -217,7 +266,7 @@ const routes = {
   'GET /api/me': async (req) => { const u = needUser(req); return { user: publicUser(u), data: u.data || {} }; },
   'PUT /api/data': async (req) => {
     const u = needUser(req);
-    if (u.role !== 'learner') throw new HttpError(403, '학습자 계정만 저장할 수 있어요.');
+    if (u.role !== 'learner') throw new HttpError(403, 'learnerOnly');
     const b = await readBody(req);
     const data = {};
     for (const k of SYNC_KEYS) if (b.data && k in b.data) data[k] = b.data[k];
@@ -232,8 +281,8 @@ const routes = {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const u = needUser(req);
     const b = await readBody(req);
-    if (!checkPw(u, b.current)) throw new HttpError(401, '현재 비밀번호가 맞지 않아요.');
-    if (String(b.next || '').length < 8) throw new HttpError(400, '새 비밀번호는 8자 이상이어야 해요.');
+    if (!checkPw(u, b.current)) throw new HttpError(401, 'curPwBad');
+    if (String(b.next || '').length < 8) throw new HttpError(400, 'newPwShort');
     u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hashPw(String(b.next), u.salt);
     dropSessions(u.id); // 다른 기기의 로그인은 모두 해제
     return { token: issueToken(u.id) };
@@ -241,7 +290,7 @@ const routes = {
   'POST /api/delete-account': async (req) => {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const u = needUser(req);
-    if (!checkPw(u, (await readBody(req)).password)) throw new HttpError(401, '비밀번호가 맞지 않아요.');
+    if (!checkPw(u, (await readBody(req)).password)) throw new HttpError(401, 'pwBad');
     dropSessions(u.id);
     delete db.users[u.id];
     for (const o of Object.values(db.users)) o.links = (o.links || []).filter((id) => id !== u.id); // 연결 정리
@@ -256,10 +305,10 @@ const routes = {
   'POST /api/link': async (req) => {
     limit('link:' + ip(req), 10, 15 * 60000);
     const u = needUser(req);
-    if (u.role !== 'guardian') throw new HttpError(403, '보호자/교사 계정만 연결할 수 있어요.');
+    if (u.role !== 'guardian') throw new HttpError(403, 'guardianOnlyLink');
     const code = str((await readBody(req)).code, 8).toUpperCase();
     const learner = Object.values(db.users).find((x) => x.role === 'learner' && x.shareCode === code);
-    if (!code || !learner) throw new HttpError(404, '연결 코드를 찾을 수 없어요.');
+    if (!code || !learner) throw new HttpError(404, 'codeNotFound');
     if (!u.links.includes(learner.id)) u.links.push(learner.id);
     persist();
     return { ok: true, name: learner.name };
@@ -278,7 +327,7 @@ const routes = {
   },
   'GET /api/dashboard': async (req, url) => {
     const u = needUser(req);
-    if (u.role !== 'guardian') throw new HttpError(403, '보호자/교사 전용이에요.');
+    if (u.role !== 'guardian') throw new HttpError(403, 'guardianOnly');
     const today = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('today') || '') ? url.searchParams.get('today') : dayKey(new Date());
     return { learners: u.links.map((id) => db.users[id]).filter(Boolean).map((l) => summarize(l, today)) };
   },
@@ -286,12 +335,12 @@ const routes = {
     limit('ai:' + ip(req), 30, 10 * 60000);
     const b = await readBody(req);
     const messages = (b.messages || []).slice(-20).map((m) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content).slice(0, 4000) }));
-    if (!messages.length || messages[0].role !== 'user') throw new HttpError(400, '메시지가 필요합니다.');
-    const reply = await callClaude(systemPrompt(b.profile), messages);
-    return { reply: reply ?? 'AI 코치를 쓰려면 서버에 ANTHROPIC_API_KEY 환경변수를 설정해 주세요. (진로검사·학습관리는 키 없이도 사용할 수 있어요.)' };
+    if (!messages.length || messages[0].role !== 'user') throw new HttpError(400, 'msgReq');
+    const reply = await callClaude(systemPrompt(b.profile, langOf(req)), messages);
+    return { reply: reply ?? M[langOf(req)].noKeyChat };
   },
-  'POST /api/plan': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makePlan(await readBody(req)); },
-  'POST /api/quiz': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makeQuiz(await readBody(req)); },
+  'POST /api/plan': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makePlan(await readBody(req), langOf(req)); },
+  'POST /api/quiz': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makeQuiz(await readBody(req), langOf(req)); },
 };
 
 http.createServer(async (req, res) => {
@@ -307,7 +356,8 @@ http.createServer(async (req, res) => {
       const code = e instanceof HttpError ? e.code : 500;
       if (code === 500) console.error(e);
       res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8' });
-      return res.end(JSON.stringify({ error: code === 500 ? '서버 오류가 발생했어요.' : e.message }));
+      const m = M[langOf(req)];
+      return res.end(JSON.stringify({ error: code === 500 ? m.serverErr : e.raw || m[e.key] || e.message }));
     }
   }
   if (url.pathname.startsWith('/api/')) { res.writeHead(404); return res.end(); }
