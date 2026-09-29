@@ -18,9 +18,9 @@ start = html.index('<body>') + 6
 body = html[start: html.index('<script src=', start)].strip()
 
 i18n = rd(PUB, 'i18n.js') + '\n' + rd(PUB, 'i18n2.js') + """
-Object.assign(UI.ko, { demo_view: '보기 전환', demo_learner: '학습자(나)', demo_teacher: '강사 화면(샘플)', demo_admin: '관리자 화면(샘플)', demo_guardian: '보호자 화면(샘플)',
+Object.assign(UI.ko, { demo_view: '보기 전환', demo_landing: '★ 처음 화면(로그인·가입)', demo_learner: '학습자(나)', demo_teacher: '강사 화면(샘플)', demo_admin: '관리자 화면(샘플)', demo_guardian: '보호자 화면(샘플)',
   preview_note: '미리보기 버전이에요. 위의 "보기 전환"에서 강사·관리자·보호자 화면을 샘플 데이터로 체험할 수 있어요(학생 등록·입력·메시지·상담일지·강사 관리도 동작하지만 저장되지 않아요). 로그인과 AI 기능은 설치 버전에서 쓸 수 있고, 학습자 화면에 입력한 내용은 이 브라우저에만 저장돼요.' });
-Object.assign(UI.vi, { demo_view: 'Chuyển chế độ xem', demo_learner: 'Học viên (tôi)', demo_teacher: 'Màn hình giáo viên (mẫu)', demo_admin: 'Màn hình quản trị (mẫu)', demo_guardian: 'Màn hình phụ huynh (mẫu)',
+Object.assign(UI.vi, { demo_view: 'Chuyển chế độ xem', demo_landing: '★ Màn hình đầu (đăng nhập/đăng ký)', demo_learner: 'Học viên (tôi)', demo_teacher: 'Màn hình giáo viên (mẫu)', demo_admin: 'Màn hình quản trị (mẫu)', demo_guardian: 'Màn hình phụ huynh (mẫu)',
   preview_note: 'Đây là bản xem thử. Ở mục "Chuyển chế độ xem" phía trên, bạn có thể trải nghiệm màn hình giáo viên, quản trị viên, phụ huynh với dữ liệu mẫu (đăng ký, nhập liệu, tin nhắn, nhật ký tư vấn, quản lý giáo viên đều hoạt động nhưng không được lưu). Đăng nhập và AI có trong bản cài đặt; dữ liệu nhập ở màn hình học viên chỉ lưu trong trình duyệt này.' });
 """
 app = rd(PUB, 'app.js')
@@ -40,10 +40,10 @@ main = rep(main, "const langSel = $('#lang');", """const _render = render;
 const roleSel = document.createElement('select'); roleSel.id = 'demorole'; roleSel.setAttribute('aria-label', 'demo');
 const demoBar = document.createElement('div'); demoBar.className = 'demo-bar'; demoBar.append(roleSel); $('#app').before(demoBar);
 roleSel.onchange = () => demoSwitch(roleSel.value);
-const roleOpts = () => ['learner', 'teacher', 'admin', 'guardian'].map((r) => `<option value="${r}">${t('demo_' + r)}</option>`).join('');
+const roleOpts = () => ['landing', 'learner', 'teacher', 'admin', 'guardian'].map((r) => `<option value="${r}">${t('demo_' + r)}</option>`).join('');
 render = function () {
   _render();
-  const cur = !state.user ? 'learner' : state.user.role; roleSel.innerHTML = roleOpts(); roleSel.value = cur; roleSel.title = t('demo_view');
+  const cur = !state.user ? (!state.profile ? 'landing' : 'learner') : state.user.role; roleSel.innerHTML = roleOpts(); roleSel.value = cur; roleSel.title = t('demo_view');
   const n = document.createElement('div'); n.className = 'preview-note'; n.textContent = t('preview_note'); $('#app').prepend(n);
 };
 const langSel = $('#lang');""")

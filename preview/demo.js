@@ -152,7 +152,8 @@ function demoApi(path, { method = 'GET', body } = {}) {
 // 데모 역할 전환 (학습자 = 실제 로컬 데이터, 나머지 = 샘플 데이터)
 function demoSwitch(role) {
   flush();
-  if (role === 'learner') { state.user = null; state.token = null; state.viewAs = null; state.ro = false; SYNC.forEach((k) => { state[k] = normalize(k, store.get(k, null)); }); state.tab = 'home'; }
+  if (role === 'landing') { state.user = null; state.token = null; state.viewAs = null; state.ro = false; state.trial = false; state.authMode = 'login'; state.tab = 'home'; clearLocal(); }
+  else if (role === 'learner') { state.user = null; state.token = null; state.viewAs = null; state.ro = false; SYNC.forEach((k) => { state[k] = normalize(k, store.get(k, null)); }); state.tab = 'home'; }
   else {
     state.viewAs = null; state.ro = false; loadData({}); state.token = 'demo';
     state.user = role === 'teacher' ? { id: 't_kim', name: L('김하리 강사','Cô Kim Hari'), role: 'teacher' } : role === 'admin' ? { id: 't_admin', name: L('관리자(마스터)','Quản trị viên'), role: 'admin' } : { id: 'g1', name: L('Mai 어머니','Mẹ của Mai'), role: 'guardian' };
