@@ -80,3 +80,22 @@ test('API 키 없을 때: 계획은 기본 템플릿, 퀴즈는 503', async () =
   assert.equal(p.ai, false); assert.equal(p.tasks.length, 3);
   assert.equal((await post('/api/quiz', { subject: '영어' })).status, 503);
 });
+
+test('비밀번호 변경·내보내기·계정 삭제·보안 헤더', async () => {
+  const a = await post('/api/signup', { email: 'del@b.co', password: 'password1', name: '삭제' });
+  const g = await post('/api/signup', { email: 'g2@b.co', password: 'password1', name: '보호자', role: 'guardian' });
+  await post('/api/link', { code: a.user.shareCode }, g.token);
+  await post('/api/data', { data: { tasks: [{ text: 'x', done: false }], wrong: [{ q: 'q' }] } }, a.token, 'PUT');
+  assert.equal((await post('/api/password', { current: 'nope', next: 'newpassword1' }, a.token)).status, 401);
+  assert.equal((await post('/api/password', { current: 'password1', next: 'short' }, a.token)).status, 400);
+  const c = await post('/api/password', { current: 'password1', next: 'newpassword1' }, a.token);
+  assert.equal((await get('/api/me', a.token)).status, 401); // 기존 토큰 무효화
+  assert.equal((await post('/api/login', { email: 'del@b.co', password: 'password1' })).status, 401);
+  const ex = await get('/api/export', c.token);
+  assert.equal(ex.account.email, 'del@b.co'); assert.equal(ex.data.wrong.length, 1);
+  assert.equal((await post('/api/delete-account', { password: 'bad' }, c.token)).status, 401);
+  assert.equal((await post('/api/delete-account', { password: 'newpassword1' }, c.token)).status, 200);
+  assert.equal((await post('/api/login', { email: 'del@b.co', password: 'newpassword1' })).status, 401);
+  assert.equal((await get('/api/dashboard', g.token)).learners.length, 0);
+  const h = await fetch(base + '/'); assert.match(h.headers.get('content-security-policy'), /default-src 'self'/); assert.equal(h.headers.get('x-content-type-options'), 'nosniff');
+});

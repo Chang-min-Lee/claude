@@ -65,11 +65,12 @@ let state = {
   log: store.get('log', {}), // { 'YYYY-MM-DD': 공부 분 }
   chat: store.get('chat', []),
   quiz: store.get('quiz', []), // [{date, subject, score, total}]
+  wrong: store.get('wrong', []), // 틀린 문제 [{subject, q, choices, answer, explain}]
   token: store.get('token', null),
   user: null,
   tab: 'home',
 };
-const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz'];
+const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong'];
 let pushTimer;
 function schedulePush() {
   if (!state.token || state.user?.role !== 'learner') return;
@@ -174,7 +175,7 @@ function renderHome(app) {
     <div class="card"><button data-go="study">학습관리</button> <button data-go="quiz">퀴즈</button> <button data-go="coach">AI 코치와 상담</button> <button id="reset">처음부터</button></div>`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
   $('#reset').onclick = () => { if (confirm('학습 데이터를 모두 지우고 처음부터 시작할까요? (로그인 상태면 서버 데이터도 지워져요)')) {
-      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], tab: 'home' });
+      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], tab: 'home' });
       SYNC.forEach(save); render();
     } };
 }
@@ -270,17 +271,23 @@ function renderCoach(app) {
 }
 
 // ---- 퀴즈 ----
-let qz = null; // { subject, questions, i, picked, score, done }
+let qz = null; // { subject, questions, i, picked, score, done, review }
 function renderQuiz(app) {
   if (qz && !qz.done) {
     const q = qz.questions[qz.i], answered = qz.picked !== null;
     app.innerHTML = `<div class="card"><h2>${esc(qz.subject)} 퀴즈 (${qz.i + 1}/${qz.questions.length})</h2><p><b>${esc(q.q)}</b></p>
       ${q.choices.map((c, k) => `<button data-k="${k}" style="display:block;width:100%;text-align:left;margin:6px 0;${answered && k === q.answer ? 'border-color:var(--ok);background:var(--main2)' : ''}" ${answered ? 'disabled' : ''}>${'①②③④'[k]} ${esc(c)}${answered && k === qz.picked ? (k === q.answer ? ' ✅' : ' ❌') : ''}</button>`).join('')}
       ${answered ? `<p>${qz.picked === q.answer ? '정답이에요! 🎉' : '아쉬워요, 정답은 ' + '①②③④'[q.answer] + ' 이에요.'}</p><p class="sub">${esc(q.explain)}</p><button class="primary" id="next">${qz.i + 1 < qz.questions.length ? '다음 문제' : '결과 보기'}</button>` : ''}</div>`;
-    app.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => { qz.picked = +b.dataset.k; if (qz.picked === q.answer) qz.score++; render(); }));
+    app.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => {
+      qz.picked = +b.dataset.k;
+      const same = (w) => w.q === q.q;
+      if (qz.picked === q.answer) { qz.score++; if (qz.review) { state.wrong = state.wrong.filter((w) => !same(w)); save('wrong'); } } // 복습에서 맞히면 목록에서 제거
+      else if (!state.wrong.some(same)) { state.wrong.push({ subject: qz.subject, q: q.q, choices: q.choices, answer: q.answer, explain: q.explain }); save('wrong'); }
+      render();
+    }));
     if (answered) $('#next').onclick = () => {
       if (qz.i + 1 < qz.questions.length) { qz.i++; qz.picked = null; } else {
-        qz.done = true; state.quiz.push({ date: today(), subject: qz.subject, score: qz.score, total: qz.questions.length }); save('quiz');
+        qz.done = true; state.quiz.push({ date: today(), subject: qz.review ? '틀린 문제 복습' : qz.subject, score: qz.score, total: qz.questions.length }); save('quiz');
       }
       render();
     };
@@ -290,7 +297,9 @@ function renderQuiz(app) {
   app.innerHTML = `${done}<div class="card"><h2>AI 퀴즈</h2><p class="sub">공부한 과목이나 주제를 입력하면 ${LEVEL_LABEL[state.profile.group]} 수준의 객관식 문제를 만들어요.</p>
     <input type="text" id="subj" maxlength="40" placeholder="예: 분수의 덧셈 / 조선 후기 역사 / 엑셀 함수">
     <div class="row"><select id="cnt"><option>3</option><option selected>5</option><option>10</option></select><span class="sub">문제</span><button class="primary" id="go">퀴즈 시작</button></div><p class="sub" id="qmsg"></p></div>
+    ${state.wrong.length ? `<div class="card"><h2>틀린 문제 복습</h2><p class="sub">틀렸던 문제 ${state.wrong.length}개가 저장돼 있어요. 다시 풀어서 맞히면 목록에서 사라져요.</p><button id="review">복습하기</button></div>` : ''}
     ${state.quiz.length ? `<div class="card"><h2>퀴즈 기록</h2>${state.quiz.slice(-8).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(q.subject)} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}`;
+  if ($('#review')) $('#review').onclick = () => { qz = { subject: '복습', questions: state.wrong.slice(0, 5), i: 0, picked: null, score: 0, done: false, review: true }; render(); };
   $('#go').onclick = async () => {
     const subject = $('#subj').value.trim(); if (!subject) { $('#qmsg').textContent = '주제를 입력해 주세요.'; return; }
     $('#go').disabled = true; $('#qmsg').textContent = '문제를 만드는 중…';
@@ -308,10 +317,34 @@ function renderAccount(app) {
     const learner = state.user.role === 'learner';
     app.innerHTML = `<div class="card"><h2>${esc(state.user.name)}님 (${learner ? '학습자' : '보호자/교사'})</h2>
       <p class="sub">${learner ? '학습 데이터가 자동으로 서버에 저장되어 다른 기기에서도 이어서 쓸 수 있어요.' : '연결된 학습자의 학습 요약을 대시보드에서 볼 수 있어요.'}</p><button id="logout">로그아웃</button></div>
+      <div class="card"><h2>계정 관리</h2>
+        <div class="row"><input type="password" id="pwcur" placeholder="현재 비밀번호" autocomplete="current-password"></div>
+        <div class="row"><input type="password" id="pwnew" placeholder="새 비밀번호 (8자 이상)" autocomplete="new-password"><button id="pwchg">변경</button></div>
+        <div class="row"><button id="export">내 데이터 내려받기</button><button id="delacc" style="color:#d33">계정 삭제</button></div>
+        <p class="sub" id="accmsg">비밀번호를 바꾸면 다른 기기의 로그인은 해제돼요. 계정을 삭제하면 서버의 모든 데이터가 지워지고 되돌릴 수 없어요.</p></div>
       ${learner ? `<div class="card"><h2>보호자·교사 연결</h2><p>내 연결 코드: <b style="font-size:1.3em;letter-spacing:2px">${esc(state.user.shareCode)}</b></p>
         <p class="sub">이 코드를 알려 주면 보호자/교사가 나의 <b>학습 요약</b>(공부 시간, 목표, 흥미검사 결과, 퀴즈 점수)을 볼 수 있어요. AI 코치와 나눈 대화는 보이지 않아요.</p>
         <button id="regen">코드 다시 만들기</button><div id="glist" class="sub" style="margin-top:10px">불러오는 중…</div></div>` : ''}`;
     $('#logout').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch {} state.token = null; state.user = null; store.set('token', null); state.tab = 'home'; render(); };
+    const msg = (t) => { $('#accmsg').textContent = t; };
+    $('#pwchg').onclick = async () => {
+      try { const r = await api('/api/password', { method: 'POST', body: { current: $('#pwcur').value, next: $('#pwnew').value } }); state.token = r.token; store.set('token', r.token); $('#pwcur').value = $('#pwnew').value = ''; msg('비밀번호를 바꿨어요.'); } catch (e) { msg(e.message); }
+    };
+    $('#export').onclick = async () => {
+      try {
+        const j = await api('/api/export');
+        const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(new Blob([JSON.stringify(j, null, 2)], { type: 'application/json' })), download: 'my-data.json' });
+        a.click(); URL.revokeObjectURL(a.href);
+      } catch (e) { msg(e.message); }
+    };
+    $('#delacc').onclick = async () => {
+      const pw = prompt('계정을 삭제하려면 비밀번호를 입력하세요. 모든 데이터가 지워지고 되돌릴 수 없어요.');
+      if (!pw) return;
+      try {
+        await api('/api/delete-account', { method: 'POST', body: { password: pw } });
+        localStorage.clear(); Object.assign(state, { token: null, user: null, profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], tab: 'home' }); render();
+      } catch (e) { msg(e.message); }
+    };
     if (learner) {
       $('#regen').onclick = async () => { state.user.shareCode = (await api('/api/regen-code', { method: 'POST' })).shareCode; render(); };
       api('/api/guardians').then(({ guardians }) => {

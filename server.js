@@ -11,7 +11,11 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const SYNC_KEYS = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz'];
+const SYNC_KEYS = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong'];
+const SEC_HEADERS = {
+  'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+  'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
+};
 
 // ---------- 저장소 (JSON 파일) ----------
 fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -28,6 +32,8 @@ function persist() {
 const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 64).toString('hex');
 const newCode = () => crypto.randomBytes(4).toString('hex').toUpperCase(); // 보호자 연결용 8자리 코드
+const checkPw = (u, pw) => crypto.timingSafeEqual(Buffer.from(hashPw(String(pw || ''), u.salt), 'hex'), Buffer.from(u.hash, 'hex'));
+function dropSessions(userId) { for (const [k, v] of Object.entries(db.sessions)) if (v.userId === userId) delete db.sessions[k]; }
 const userByEmail = (email) => Object.values(db.users).find((u) => u.email === email);
 
 class HttpError extends Error { constructor(code, msg) { super(msg); this.code = code; } }
@@ -199,7 +205,7 @@ const routes = {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const b = await readBody(req);
     const u = userByEmail(str(b.email, 100).toLowerCase());
-    const ok = u && crypto.timingSafeEqual(Buffer.from(hashPw(String(b.password || ''), u.salt), 'hex'), Buffer.from(u.hash, 'hex'));
+    const ok = u && checkPw(u, b.password);
     if (!ok) throw new HttpError(401, '이메일 또는 비밀번호가 맞지 않아요.');
     return { token: issueToken(u.id), user: publicUser(u) };
   },
@@ -217,9 +223,34 @@ const routes = {
     for (const k of SYNC_KEYS) if (b.data && k in b.data) data[k] = b.data[k];
     if (Array.isArray(data.chat)) data.chat = data.chat.slice(-50);
     if (Array.isArray(data.quiz)) data.quiz = data.quiz.slice(-100);
+    if (Array.isArray(data.wrong)) data.wrong = data.wrong.slice(-50);
     u.data = { ...u.data, ...data };
     persist();
     return { ok: true };
+  },
+  'POST /api/password': async (req) => {
+    limit('auth:' + ip(req), 20, 15 * 60000);
+    const u = needUser(req);
+    const b = await readBody(req);
+    if (!checkPw(u, b.current)) throw new HttpError(401, '현재 비밀번호가 맞지 않아요.');
+    if (String(b.next || '').length < 8) throw new HttpError(400, '새 비밀번호는 8자 이상이어야 해요.');
+    u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hashPw(String(b.next), u.salt);
+    dropSessions(u.id); // 다른 기기의 로그인은 모두 해제
+    return { token: issueToken(u.id) };
+  },
+  'POST /api/delete-account': async (req) => {
+    limit('auth:' + ip(req), 20, 15 * 60000);
+    const u = needUser(req);
+    if (!checkPw(u, (await readBody(req)).password)) throw new HttpError(401, '비밀번호가 맞지 않아요.');
+    dropSessions(u.id);
+    delete db.users[u.id];
+    for (const o of Object.values(db.users)) o.links = (o.links || []).filter((id) => id !== u.id); // 연결 정리
+    persist();
+    return { ok: true };
+  },
+  'GET /api/export': async (req) => { // 개인정보 열람·이동권: 내 계정 정보와 데이터 전체
+    const u = needUser(req);
+    return { account: { name: u.name, email: u.email, role: u.role }, data: u.data || {} };
   },
   'POST /api/regen-code': async (req) => { const u = needUser(req); u.shareCode = newCode(); persist(); return { shareCode: u.shareCode }; },
   'POST /api/link': async (req) => {
@@ -265,6 +296,7 @@ const routes = {
 
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
+  for (const [k, v] of Object.entries(SEC_HEADERS)) res.setHeader(k, v);
   const handler = routes[`${req.method} ${url.pathname}`];
   if (handler) {
     try {
