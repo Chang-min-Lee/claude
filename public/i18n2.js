@@ -57,7 +57,9 @@ Object.assign(UI.ko, {
   reg_title: '학생 등록', reg_desc: '학생 계정을 대신 만들고 검사·계획·성적을 입력할 수 있어요.', reg_name: '학생 이름', reg_school: '학교/학년 (선택)', reg_note: '메모 (선택)', svc_study: '학습관리 이용', svc_career: '진로컨설팅 이용',
   reg_consent_note: '학생(또는 보호자)에게 학습 정보 수집·이용에 대한 동의를 받은 뒤 등록해 주세요. 만 14세 미만은 법정대리인 동의가 필요해요.', reg_btn: '학생 등록', reg_need_name: '이름을 입력해 주세요.', reg_done: '{name} 학생을 등록했어요.', reg_code: '활성화 코드',
   reg_code_help: '학생이 직접 로그인하려면 로그인 화면의 "학생 계정 활성화"에 이 코드를 입력하도록 안내해 주세요. 보호자도 이 코드로 연결할 수 있어요.',
-  staff_title: '강사 관리', staff_desc: '강사·관리자 계정을 추가·수정·삭제해요. 강사를 삭제해도 담당 학생 데이터는 남고 "미배정"이 돼요.', staff_add: '강사 추가', staff_students: '담당 학생 {n}명', staff_pw_reset: '새 비밀번호(변경할 때만)', staff_del_confirm: '정말 삭제',
+  reset_title: '비밀번호 재설정', reset_desc: '비밀번호를 잊었다면 담당 강사나 관리자에게 재설정 코드를 받아 새 비밀번호를 정해요. 코드는 24시간 동안, 한 번만 쓸 수 있어요.', reset_code_ph: '재설정 코드', reset_btn: '비밀번호 바꾸기',
+  reset_issue: '비밀번호 재설정 코드 발급', reset_issued: '{name}님의 재설정 코드: {code} (24시간 유효, 1회용) — 본인에게 직접 전달해 주세요.', acct_find_title: '계정 찾기 · 재설정 코드', acct_find_ph: '이름 또는 이메일 (2자 이상)', acct_find_btn: '검색', acct_none: '검색 결과가 없어요.',
+  staff_last_admin: '마지막 관리자 계정은 변경하거나 삭제할 수 없어요.', staff_title: '강사 관리', staff_desc: '강사·관리자 계정을 추가·수정·삭제해요. 강사를 삭제해도 담당 학생 데이터는 남고 "미배정"이 돼요.', staff_add: '강사 추가', staff_students: '담당 학생 {n}명', staff_pw_reset: '새 비밀번호(변경할 때만)', staff_del_confirm: '정말 삭제',
 });
 UI.ko.role_teacher = '강사';
 Object.assign(UI.vi, {
@@ -111,7 +113,9 @@ Object.assign(UI.vi, {
   reg_title: 'Đăng ký học viên', reg_desc: 'Bạn có thể tạo tài khoản thay học viên và nhập kết quả kiểm tra, kế hoạch, điểm số.', reg_name: 'Tên học viên', reg_school: 'Trường/lớp (không bắt buộc)', reg_note: 'Ghi chú (không bắt buộc)', svc_study: 'Dùng dịch vụ quản lý học tập', svc_career: 'Dùng dịch vụ tư vấn hướng nghiệp',
   reg_consent_note: 'Hãy đăng ký sau khi đã được học viên (hoặc phụ huynh) đồng ý cho thu thập và sử dụng thông tin học tập. Trẻ dưới 14 tuổi cần có sự đồng ý của người đại diện hợp pháp.', reg_btn: 'Đăng ký học viên', reg_need_name: 'Vui lòng nhập tên.', reg_done: 'Đã đăng ký học viên {name}.', reg_code: 'Mã kích hoạt',
   reg_code_help: 'Để học viên tự đăng nhập, hãy hướng dẫn nhập mã này vào mục "Kích hoạt tài khoản" ở màn hình đăng nhập. Phụ huynh cũng có thể kết nối bằng mã này.',
-  staff_title: 'Quản lý giáo viên', staff_desc: 'Thêm, sửa, xóa tài khoản giáo viên và quản trị viên. Khi xóa giáo viên, dữ liệu học viên phụ trách vẫn được giữ và chuyển thành "Chưa phân công".', staff_add: 'Thêm giáo viên', staff_students: 'Phụ trách {n} học viên', staff_pw_reset: 'Mật khẩu mới (chỉ khi cần đổi)', staff_del_confirm: 'Xác nhận xóa',
+  reset_title: 'Đặt lại mật khẩu', reset_desc: 'Nếu quên mật khẩu, hãy nhận mã đặt lại từ giáo viên phụ trách hoặc quản trị viên rồi đặt mật khẩu mới. Mã có hiệu lực 24 giờ và chỉ dùng được một lần.', reset_code_ph: 'Mã đặt lại', reset_btn: 'Đổi mật khẩu',
+  reset_issue: 'Cấp mã đặt lại mật khẩu', reset_issued: 'Mã đặt lại của {name}: {code} (hiệu lực 24 giờ, dùng một lần) — hãy đưa trực tiếp cho người đó.', acct_find_title: 'Tìm tài khoản · mã đặt lại', acct_find_ph: 'Tên hoặc email (từ 2 ký tự)', acct_find_btn: 'Tìm', acct_none: 'Không có kết quả.',
+  staff_last_admin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', staff_title: 'Quản lý giáo viên', staff_desc: 'Thêm, sửa, xóa tài khoản giáo viên và quản trị viên. Khi xóa giáo viên, dữ liệu học viên phụ trách vẫn được giữ và chuyển thành "Chưa phân công".', staff_add: 'Thêm giáo viên', staff_students: 'Phụ trách {n} học viên', staff_pw_reset: 'Mật khẩu mới (chỉ khi cần đổi)', staff_del_confirm: 'Xác nhận xóa',
 });
 
 // 해석 팁 (종합 결과·진단서의 규칙 기반 문장)

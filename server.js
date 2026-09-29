@@ -17,15 +17,15 @@ const SEC_HEADERS = {
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
 };
 
-// ---------- 저장소 (JSON 파일) ----------
-fs.mkdirSync(DATA_DIR, { recursive: true });
-const DB_FILE = path.join(DATA_DIR, 'db.json');
-let db = { users: {}, sessions: {} };
-try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch {}
-function persist() {
-  const tmp = DB_FILE + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(db));
-  fs.renameSync(tmp, DB_FILE);
+// ---------- 저장소 (SQLite 우선, 없으면 JSON) ----------
+const { openStore } = require('./lib/store');
+const store = openStore(DATA_DIR);
+const db = store.load();
+// 바뀐 사용자만 저장한다.
+function persist(...users) { for (const u of users) if (u && db.users[u.id]) store.saveUser(u); }
+function removeUserEverywhere(id) { // 사용자를 지우고 다른 사용자의 연결 목록에서도 정리
+  delete db.users[id]; store.removeUser(id);
+  for (const o of Object.values(db.users)) if ((o.links || []).includes(id)) { o.links = o.links.filter((x) => x !== id); persist(o); }
 }
 
 // ---------- 유틸 ----------
@@ -33,7 +33,7 @@ const sha = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const hashPw = (pw, salt) => crypto.scryptSync(pw, salt, 64).toString('hex');
 const newCode = () => crypto.randomBytes(4).toString('hex').toUpperCase(); // 보호자 연결용 8자리 코드
 const checkPw = (u, pw) => crypto.timingSafeEqual(Buffer.from(hashPw(String(pw || ''), u.salt), 'hex'), Buffer.from(u.hash, 'hex'));
-function dropSessions(userId) { for (const [k, v] of Object.entries(db.sessions)) if (v.userId === userId) delete db.sessions[k]; }
+function dropSessions(userId) { for (const [k, v] of Object.entries(db.sessions)) if (v.userId === userId) delete db.sessions[k]; store.removeSessionsOf(userId); }
 const userByEmail = (email) => Object.values(db.users).find((u) => u.email === email);
 
 
@@ -51,6 +51,7 @@ const M = {
     curPwBad: '현재 비밀번호가 맞지 않아요.', newPwShort: '새 비밀번호는 8자 이상이어야 해요.', pwBad: '비밀번호가 맞지 않아요.', msgReq: '메시지가 필요합니다.', serverErr: '서버 오류가 발생했어요.',
     diagNeedKey: 'AI 진단서는 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (아래의 기본 해석은 키 없이도 볼 수 있어요.)', forbidden: '접근 권한이 없어요.', notFound: '찾을 수 없어요.', staffOnly: '강사/관리자 전용이에요.', adminOnly: '관리자 전용이에요.',
     lastAdmin: '마지막 남은 관리자 계정은 변경하거나 삭제할 수 없어요.', roleBad: '역할이 올바르지 않아요.', notManaged: '강사가 등록한 학생만 활성화할 수 있어요.', dataTooBig: '저장할 데이터가 너무 커요.', selfDelete: '내 계정은 여기서 삭제할 수 없어요. 계정 탭을 이용해 주세요.',
+    resetBad: '재설정 코드가 올바르지 않거나 만료됐어요.', noReset: '이메일 계정이 있는 사용자만 재설정 코드를 발급할 수 있어요.',
     noKeyChat: 'AI 코치를 쓰려면 서버에 ANTHROPIC_API_KEY 환경변수를 설정해 주세요. (진로검사·학습관리는 키 없이도 사용할 수 있어요.)',
   },
   vi: {
@@ -63,6 +64,7 @@ const M = {
     curPwBad: 'Mật khẩu hiện tại không đúng.', newPwShort: 'Mật khẩu mới phải có ít nhất 8 ký tự.', pwBad: 'Mật khẩu không đúng.', msgReq: 'Cần có tin nhắn.', serverErr: 'Đã xảy ra lỗi máy chủ.',
     diagNeedKey: 'Bản chẩn đoán AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản bên dưới vẫn xem được khi không có khóa.)', forbidden: 'Bạn không có quyền truy cập.', notFound: 'Không tìm thấy.', staffOnly: 'Chỉ dành cho giáo viên/quản trị viên.', adminOnly: 'Chỉ dành cho quản trị viên.',
     lastAdmin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', roleBad: 'Vai trò không hợp lệ.', notManaged: 'Chỉ học viên do giáo viên đăng ký mới có thể kích hoạt.', dataTooBig: 'Dữ liệu cần lưu quá lớn.', selfDelete: 'Không thể xóa tài khoản của chính bạn ở đây. Hãy dùng tab Tài khoản.',
+    resetBad: 'Mã đặt lại không đúng hoặc đã hết hạn.', noReset: 'Chỉ có thể cấp mã đặt lại cho người dùng đã có tài khoản email.',
     noKeyChat: 'Để dùng AI, hãy cài biến môi trường ANTHROPIC_API_KEY trên máy chủ. (Trắc nghiệm sở thích và quản lý học tập vẫn dùng được khi không có khóa.)',
   },
 };
@@ -77,6 +79,8 @@ function limit(key, max, windowMs) {
   if (arr.length >= max) throw new HttpError(429, 'tooMany');
   arr.push(now); hits.set(key, arr);
 }
+
+setInterval(() => { const now = Date.now(); for (const [k, arr] of hits) if (!arr.length || now - arr.at(-1) > 3600000) hits.delete(k); }, 600000).unref();
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -96,9 +100,11 @@ const needUser = (req) => authUser(req) || (() => { throw new HttpError(401, 'ne
 
 function issueToken(userId) {
   const token = crypto.randomBytes(32).toString('hex');
-  db.sessions[sha(token)] = { userId, exp: Date.now() + SESSION_MS };
+  const rec = { userId, exp: Date.now() + SESSION_MS };
+  db.sessions[sha(token)] = rec; store.saveSession(sha(token), rec);
   for (const [k, v] of Object.entries(db.sessions)) if (v.exp < Date.now()) delete db.sessions[k];
-  persist();
+  store.purgeSessions(Date.now());
+  persist(db.users[userId]); // 가입·활성화·비밀번호 변경 직후의 사용자 변경도 함께 저장
   return token;
 }
 const publicUser = (u) => ({ id: u.id, name: u.name, role: u.role, shareCode: u.role === 'learner' ? u.shareCode : undefined, managed: u.role === 'learner' ? !u.email : undefined });
@@ -126,10 +132,13 @@ function dataFor(actor, learner) {
   if (d.deep && !showWb) { d.deep = { ...d.deep }; delete d.deep.wellbeing; }
   return d;
 }
+function unassignTeacher(learnerId) {
+  for (const o of Object.values(db.users)) if (o.role === 'teacher' && (o.links || []).includes(learnerId)) { o.links = o.links.filter((x) => x !== learnerId); persist(o); }
+}
 function assignTeacher(learnerId, teacherId) { // 한 학생은 한 명의 담당 강사
-  for (const o of Object.values(db.users)) if (o.role === 'teacher') o.links = (o.links || []).filter((x) => x !== learnerId);
+  unassignTeacher(learnerId);
   const t = db.users[teacherId];
-  if (t && t.role === 'teacher' && !t.links.includes(learnerId)) t.links.push(learnerId);
+  if (t && t.role === 'teacher' && !t.links.includes(learnerId)) { t.links.push(learnerId); persist(t); }
 }
 const teacherOf = (learnerId) => Object.values(db.users).find((o) => o.role === 'teacher' && (o.links || []).includes(learnerId));
 const adminCount = () => Object.values(db.users).filter((u) => u.role === 'admin').length;
@@ -140,10 +149,10 @@ function bootstrapAdmin() {
   const email = String(process.env.ADMIN_EMAIL || '').trim().toLowerCase(), pw = String(process.env.ADMIN_PASSWORD || '');
   if (!email || pw.length < 8) return;
   const existing = userByEmail(email);
-  if (existing) { if (existing.role !== 'admin') { existing.role = 'admin'; persist(); } return; }
+  if (existing) { if (existing.role !== 'admin') { existing.role = 'admin'; persist(existing); } return; }
   const salt = crypto.randomBytes(16).toString('hex');
   const u = newUser({ email, name: '관리자', role: 'admin', salt, hash: hashPw(pw, salt) });
-  db.users[u.id] = u; persist();
+  db.users[u.id] = u; persist(u);
 }
 bootstrapAdmin();
 
@@ -310,12 +319,14 @@ function storeData(learner, clean) {
   if (JSON.stringify(merged).length > MAX_DATA_BYTES) throw new HttpError(413, 'dataTooBig');
   learner.data = merged;
   if (clean.profile && !learner.email && clean.profile.name) learner.name = clean.profile.name; // 강사가 등록한 학생은 프로필 이름 = 계정 이름
-  persist();
+  persist(learner);
 }
 
 // ---------- 라우터 ----------
-const ip = (req) => req.socket.remoteAddress || '';
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+const ip = (req) => (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
 const routes = {
+  'GET /healthz': async () => ({ ok: true, storage: store.kind }),
   'POST /api/signup': async (req) => {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const b = await readBody(req);
@@ -340,7 +351,7 @@ const routes = {
   },
   'POST /api/logout': async (req) => {
     const t = (req.headers.authorization || '').replace(/^Bearer /, '');
-    if (t) { delete db.sessions[sha(t)]; persist(); }
+    if (t) { delete db.sessions[sha(t)]; store.removeSession(sha(t)); }
     return { ok: true };
   },
   'GET /api/me': async (req) => { const u = needUser(req); return { user: publicUser(u), data: u.data || {} }; },
@@ -367,16 +378,14 @@ const routes = {
     if (!checkPw(u, (await readBody(req)).password)) throw new HttpError(401, 'pwBad');
     if (u.role === 'admin' && adminCount() <= 1) throw new HttpError(400, 'lastAdmin');
     dropSessions(u.id);
-    delete db.users[u.id];
-    for (const o of Object.values(db.users)) o.links = (o.links || []).filter((id) => id !== u.id); // 연결 정리
-    persist();
+    removeUserEverywhere(u.id); // 연결 정리 포함
     return { ok: true };
   },
   'GET /api/export': async (req) => { // 개인정보 열람·이동권: 내 계정 정보와 데이터 전체
     const u = needUser(req);
     return { account: { name: u.name, email: u.email, role: u.role }, data: u.data || {} };
   },
-  'POST /api/regen-code': async (req) => { const u = needUser(req); u.shareCode = newCode(); persist(); return { shareCode: u.shareCode }; },
+  'POST /api/regen-code': async (req) => { const u = needUser(req); u.shareCode = newCode(); persist(u); return { shareCode: u.shareCode }; },
   'POST /api/link': async (req) => {
     limit('link:' + ip(req), 10, 15 * 60000);
     const u = needUser(req);
@@ -385,7 +394,7 @@ const routes = {
     const learner = Object.values(db.users).find((x) => x.role === 'learner' && x.shareCode === code);
     if (!code || !learner) throw new HttpError(404, 'codeNotFound');
     if (!u.links.includes(learner.id)) u.links.push(learner.id);
-    persist();
+    persist(u);
     return { ok: true, name: learner.name };
   },
   'POST /api/unlink': async (req) => {
@@ -393,7 +402,7 @@ const routes = {
     const id = str((await readBody(req)).id, 60);
     if (u.role === 'guardian' || u.role === 'teacher') u.links = u.links.filter((x) => x !== id);
     else if (db.users[id]) db.users[id].links = db.users[id].links.filter((x) => x !== u.id); // 학습자가 보호자 연결을 끊음
-    persist();
+    persist(u, db.users[id]);
     return { ok: true };
   },
   'GET /api/guardians': async (req) => {
@@ -430,7 +439,7 @@ const routes = {
     db.users[l.id] = l;
     const tid = u.role === 'teacher' ? u.id : db.users[b.teacherId]?.role === 'teacher' ? b.teacherId : null;
     if (tid) assignTeacher(l.id, tid);
-    persist();
+    persist(l);
     return { id: l.id, shareCode: l.shareCode };
   },
   'POST /api/claim': async (req) => { // 강사가 등록한 학생이 본인 계정(이메일·비밀번호)을 만든다
@@ -466,8 +475,28 @@ const routes = {
     if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
     const salt = crypto.randomBytes(16).toString('hex');
     const s = newUser({ email, name, role: b.role, salt, hash: hashPw(password, salt) });
-    db.users[s.id] = s; persist();
+    db.users[s.id] = s; persist(s);
     return { id: s.id };
+  },
+  // ---- 비밀번호 재설정: 이메일 대신 강사/관리자가 일회용 코드를 발급 ----
+  'POST /api/reset': async (req) => {
+    const b = await readBody(req);
+    const email = clipStr(b.email, 100).toLowerCase();
+    limit('auth:' + ip(req), 20, 15 * 60000); limit('reset:' + email, 6, 15 * 60000);
+    const u = userByEmail(email), code = String(b.code || '').trim().toUpperCase();
+    const ok = u && u.reset && u.reset.exp > Date.now() && code.length >= 8 && crypto.timingSafeEqual(Buffer.from(sha(code)), Buffer.from(u.reset.hash));
+    if (!ok) throw new HttpError(400, 'resetBad');
+    if (String(b.password || '').length < 8) throw new HttpError(400, 'pwShort');
+    u.salt = crypto.randomBytes(16).toString('hex'); u.hash = hashPw(String(b.password), u.salt); delete u.reset; // 코드는 한 번만 사용
+    dropSessions(u.id);
+    return { token: issueToken(u.id), user: publicUser(u) }; // issueToken 이 사용자 저장
+  },
+  'GET /api/accounts': async (req, url) => { // 관리자: 계정 찾기
+    const u = needUser(req);
+    if (u.role !== 'admin') throw new HttpError(403, 'adminOnly');
+    const q = clipStr(url.searchParams.get('q'), 40).toLowerCase();
+    if (q.length < 2) return { accounts: [] };
+    return { accounts: Object.values(db.users).filter((x) => x.email && (x.email.includes(q) || String(x.name).toLowerCase().includes(q))).slice(0, 20).map((x) => ({ id: x.id, name: x.name, email: x.email, role: x.role })) };
   },
   'POST /api/schedule': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeSchedule(await readBody(req), langOf(req)); },
   'POST /api/diagnosis': async (req) => { limit('ai:' + ip(req), 20, 10 * 60000); return aiMod.makeDiagnosis(await readBody(req), langOf(req)); },
@@ -502,21 +531,29 @@ const paramRoutes = [
     const l = learnerOr404(u, id);
     const b = await readBody(req);
     const t = db.users[b.teacherId];
-    if (b.teacherId === '') { for (const o of Object.values(db.users)) if (o.role === 'teacher') o.links = o.links.filter((x) => x !== l.id); }
+    if (b.teacherId === '') unassignTeacher(l.id);
     else if (t && t.role === 'teacher') assignTeacher(l.id, t.id);
     else throw new HttpError(400, 'roleBad');
-    persist();
     return { ok: true };
   }],
   ['DELETE', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
     const u = needUser(req);
     if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
     const l = learnerOr404(u, id, true);
-    if (l.email) { u.links = (u.links || []).filter((x) => x !== id); persist(); return { ok: true, unlinked: true }; } // 본인 계정은 삭제하지 않고 연결만 해제
-    dropSessions(l.id); delete db.users[l.id];
-    for (const o of Object.values(db.users)) o.links = (o.links || []).filter((x) => x !== id);
-    persist();
+    if (l.email) { u.links = (u.links || []).filter((x) => x !== id); persist(u); return { ok: true, unlinked: true }; } // 본인 계정은 삭제하지 않고 연결만 해제
+    dropSessions(l.id); removeUserEverywhere(l.id);
     return { ok: true };
+  }],
+  ['POST', /^\/api\/users\/([\w-]+)\/reset-code$/, async (req, url, [id]) => { // 관리자: 누구든 / 강사: 담당 학생만
+    const u = needUser(req), t = db.users[id];
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    if (!t) throw new HttpError(404, 'notFound');
+    if (u.role === 'teacher' && !canWrite(u, t)) throw new HttpError(403, 'forbidden');
+    if (!t.email || t.id === u.id) throw new HttpError(400, 'noReset');
+    const code = crypto.randomBytes(6).toString('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 8).toUpperCase().padEnd(8, 'X');
+    t.reset = { hash: sha(code), exp: Date.now() + 24 * 3600 * 1000 };
+    persist(t);
+    return { code, name: t.name, expiresHours: 24 };
   }],
   ['PUT', /^\/api\/staff\/([\w-]+)$/, async (req, url, [id]) => {
     const u = needUser(req);
@@ -535,7 +572,7 @@ const paramRoutes = [
       if (String(b.password).length < 8) throw new HttpError(400, 'pwShort');
       t.salt = crypto.randomBytes(16).toString('hex'); t.hash = hashPw(String(b.password), t.salt); dropSessions(t.id);
     }
-    persist();
+    persist(t);
     return { ok: true };
   }],
   ['DELETE', /^\/api\/staff\/([\w-]+)$/, async (req, url, [id]) => {
@@ -545,7 +582,7 @@ const paramRoutes = [
     if (!t || !isStaff(t)) throw new HttpError(404, 'notFound');
     if (t.id === u.id) throw new HttpError(400, 'selfDelete');
     if (t.role === 'admin' && adminCount() <= 1) throw new HttpError(400, 'lastAdmin');
-    dropSessions(t.id); delete db.users[t.id]; persist(); // 담당 학생은 삭제되지 않고 '미배정'이 된다
+    dropSessions(t.id); removeUserEverywhere(t.id); // 담당 학생은 삭제되지 않고 '미배정'이 된다
     return { ok: true };
   }],
 ];
@@ -553,6 +590,7 @@ const paramRoutes = [
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   for (const [k, v] of Object.entries(SEC_HEADERS)) res.setHeader(k, v);
+  if (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   let handler = routes[`${req.method} ${url.pathname}`], args = [];
   if (!handler) for (const [method, re, fn] of paramRoutes) { const m = method === req.method && url.pathname.match(re); if (m) { handler = fn; args = [m.slice(1)]; break; } }
   if (handler) {
@@ -578,3 +616,4 @@ http.createServer(async (req, res) => {
     res.end(buf);
   });
 }).listen(PORT, () => console.log(`http://localhost:${PORT}`));
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { store.close(); process.exit(0); });

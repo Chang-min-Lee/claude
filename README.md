@@ -3,14 +3,31 @@
 초등학생부터 대학생·성인까지, **진로탐색 + 종합검사 + 학습관리 + 리포트 + 강사 콘솔**을 한국어/베트남어로 제공하는 웹앱.
 학습자가 스스로 쓰는 앱이면서, 강사·컨설턴트가 여러 학생을 관리하는 콘솔로도 쓸 수 있습니다.
 
-## 실행
+## 실행 (내 컴퓨터)
 ```bash
+cp .env.example .env               # 값 채우기 (선택). 아래처럼 환경변수로 직접 지정해도 돼요
 export ANTHROPIC_API_KEY=sk-ant-...        # 없으면 AI 기능(코치·퀴즈·AI 시간표/진단서)만 꺼지고 나머지는 동작
-export ADMIN_EMAIL=admin@example.com       # 최초 관리자 계정 (선택, 아래 '강사·관리자' 참고)
-export ADMIN_PASSWORD='8자-이상-비밀번호'
+export ADMIN_EMAIL=admin@example.com       # 최초 관리자 계정
+export ADMIN_PASSWORD='8자-이상-비밀번호'    # 첫 로그인 후 [계정]에서 바꾸세요
 npm start                                  # http://localhost:3000
 ```
-Node 18+ 필요, 외부 의존성 없음. 브라우저 언어가 베트남어면 자동으로 베트남어로 시작하고 상단 선택창으로 바꿀 수 있어요. 모델은 `CLAUDE_MODEL`로 변경.
+Node 18+ (내장 SQLite 저장은 Node 22.5+, 그보다 낮으면 자동으로 JSON 파일 저장으로 동작). 외부 의존성 없음. 브라우저 언어가 베트남어면 자동으로 베트남어로 시작하고 상단 선택창으로 바꿀 수 있어요. 모델은 `CLAUDE_MODEL`로 변경.
+
+## 배포 (인터넷에 올리기)
+**꼭 지킬 것**: ① 데이터 디렉터리(`DATA_DIR`)를 **영구 저장 공간(볼륨/디스크)** 에 둘 것 ② **HTTPS** 로 서비스할 것 ③ 프록시 뒤에서는 `TRUST_PROXY=1`.
+- **Docker(어디서나)**: `.env` 를 만든 뒤 `docker compose up -d --build` → `http://서버:3000`. 데이터는 `jinro-data` 볼륨(/data)에 저장. 앞단에 Caddy/nginx/Cloudflare 등으로 HTTPS 를 붙이세요 (예: Caddy 한 줄 `example.com { reverse_proxy localhost:3000 }`)
+- **Render.com**: 저장소 연결 → `render.yaml` 블루프린트 사용. 환경변수(`ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ANTHROPIC_API_KEY`)만 입력. 영구 디스크는 유료 플랜에서 제공돼요
+- 상태 점검 주소: `GET /healthz`
+- ⚠ Dockerfile·compose·render.yaml 은 이 저장소의 개발 환경(Docker 데몬 없음)에서 **실제 빌드를 못 해 봤어요.** 첫 배포 때 로그를 확인하세요. 서버 동작(TRUST_PROXY, 재시작 후 데이터 유지, 백업 복원)은 자동 테스트로 검증돼 있어요
+
+## 저장소·백업·복구
+- 데이터는 `$DATA_DIR/app.sqlite`(WAL). 예전 `db.json` 이 있으면 첫 실행 때 자동 이전하고 `db.json.migrated` 로 보관
+- **백업**: `npm run backup` (서버가 켜져 있어도 됨, 최근 14개 유지) → 매일 자동 실행하려면 cron/스케줄러에 등록하고, **백업 파일은 다른 곳(클라우드 저장소 등)에도 복사**하세요
+- **복구**: 서버를 멈추고 백업 파일을 `$DATA_DIR/app.sqlite` 로 복사한 뒤 다시 시작 (테스트로 검증됨)
+- 비밀번호를 잊었을 때: 이메일 발송 없이 **강사/관리자가 재설정 코드(24시간·1회용)를 발급** → 로그인 화면의 "비밀번호 재설정"에 입력. 관리자는 [강사 관리 → 계정 찾기]에서 모든 계정에 발급, 강사는 담당 학생 화면 위쪽에서 발급. 관리자 본인 비밀번호를 잊으면 `ADMIN_EMAIL` 계정으로는 서버 관리자가 다른 관리자를 통해 재설정하세요
+
+## 미리보기(아티팩트) 다시 만들기
+`python3 preview/build.py` → `preview/preview.html` (서버 없이 열리는 단일 파일. 강사·관리자·보호자 화면은 `preview/demo.js` 의 샘플 데이터로 체험)
 
 ## 학습자 기능
 - **연령별 맞춤**: 초등/중등/고등/대학/성인에 따라 문항·직업·다음 행동·AI 말투·퀴즈 수준이 달라짐
@@ -28,20 +45,20 @@ Node 18+ 필요, 외부 의존성 없음. 브라우저 언어가 베트남어면
 ## 개인정보·보안
 - **AI 상담 대화는 누구에게도 공개되지 않음**. **정서웰빙 결과는 본인만** 보고, 본인이 동의(등록 학생은 기본 동의)한 경우에만 담당 강사에게 '주의' 표시가 나가며 보호자에게는 어떤 경우에도 공유되지 않음
 - 비밀번호 scrypt 해시, 세션 토큰 해시 저장, 로그인/AI 호출 속도 제한, 서버측 데이터 검증(`lib/sanitize.js`), CSP 등 보안 헤더, 계정 관리(비밀번호 변경·데이터 내려받기·계정 삭제), 로그아웃 시 기기의 학습 데이터 삭제
-- 데이터는 `data/db.json`(`DATA_DIR`). 소규모/시범용 — 서비스 확장 시 DB로 교체 권장. HTTPS 뒤에서 운영하세요
+- 사용자 규모가 아주 커지면(수만 명 이상) PostgreSQL 등으로 옮기는 것을 검토하세요. 소규모~수천 명 규모는 SQLite 로 충분해요
 - 만 14세 미만 대상 서비스는 법정대리인 동의 절차가 필요합니다(한국 개인정보 보호법, 베트남 Nghị định 13/2023 등) — 정식 운영 전 검토
 - 정서웰빙 '주의' 안내의 상담 연락처(한국 1388·109, 베트남 111)는 운영 시점에 최신 번호인지 확인하세요
 
 ## 구조
-`server.js`(API·권한) · `lib/sanitize.js`(데이터 검증) · `lib/ai.js`(AI 시간표·진단서) · `public/`: `app.js`(코어) `plan.js` `report.js` `tests.js`(검사 정의·채점) `tests-ui.js` `staff.js` `quiz.js` `i18n*.js`(문구)
+`server.js`(API·권한) · `lib/store.js`(저장소) · `lib/sanitize.js`(데이터 검증) · `lib/ai.js`(AI 시간표·진단서) · `scripts/backup.js` · `preview/`(미리보기 빌드) · `public/`: `app.js`(코어) `plan.js` `report.js` `tests.js`(검사 정의·채점) `tests-ui.js` `staff.js` `quiz.js` `i18n*.js`(문구)
 
 ## 언어 추가
 `public/i18n.js`·`i18n2.js`(UI·콘텐츠·해석 팁), `public/tests.js` 문구(`TEST_TEXT`), `server.js`의 `LANGS`·`M`·`STYLE`·`LEVEL`·`PLAN_STEPS`, `lib/ai.js` 프롬프트에 항목 추가
 
 ## 테스트
 ```bash
-npm test   # API·권한·데이터 검증·AI(목 서버) 14개 시나리오
+npm test   # API·권한·데이터 검증·AI(목 서버)·저장소(재시작/이전/백업)·운영 설정 20개 시나리오
 ```
 
 ## 다음 단계 아이디어
-이메일 인증·비밀번호 재설정(메일 발송 서비스 필요), DB 이전(SQLite/PostgreSQL), 커리어넷·워크넷(한국)·베트남 직업 데이터 연동, 강사용 학부모 리포트 발송 이력, 알림.
+이메일 인증·자동 재설정 메일(메일 발송 서비스 필요), 커리어넷·워크넷(한국)·베트남 직업 데이터 연동, 강사용 학부모 리포트 발송 이력, 알림.

@@ -37,7 +37,7 @@ if (state.goal && !Array.isArray(state.goal.milestones)) state.goal.milestones =
 const dirty = new Set(); // 서버로 아직 보내지 않은 키만 전송해서, 다른 기기·강사가 바꾼 다른 키를 덮어쓰지 않는다
 let pushTimer;
 function saveTarget() { // 저장 대상: 내 계정 / 열어 둔 학생(강사) / 저장 안 함(읽기 전용·비로그인)
-  if (PREVIEW || !state.token || state.ro) return null;
+  if ((PREVIEW && !state.viewAs) || !state.token || state.ro) return null;
   if (state.viewAs) return `/api/students/${state.viewAs.id}/data`;
   return state.user?.role === 'learner' ? '/api/data' : null;
 }
@@ -159,8 +159,12 @@ function render() {
   if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
   (RENDERERS()[state.tab] || renderHome)(app);
   if (state.viewAs) { // 학생을 열어 본 상태의 안내 줄
-    app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}</div>`);
+    app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}
+      ${!state.ro && !state.viewAs.managed && !PREVIEW ? ` <button id="resetcode">🔑 ${t('reset_issue')}</button>` : ''} <span class="sub" id="resetmsg"></span></div>`);
     $('#backlist').onclick = closeStudent;
+    if ($('#resetcode')) $('#resetcode').onclick = async () => {
+      try { const r = await api(`/api/users/${state.viewAs.id}/reset-code`, { method: 'POST' }); $('#resetmsg').textContent = t('reset_issued', { name: r.name, code: r.code }); } catch (e) { $('#resetmsg').textContent = e.message; }
+    };
   }
 }
 
@@ -366,7 +370,10 @@ function renderAccount(app) {
       <p class="sub">${t('minor_note')}</p></div>
     <div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
       <input type="text" id="ccode" maxlength="8" placeholder="${t('claim_code_ph')}"><div class="row"><input type="text" id="cemail" placeholder="${t('email_ph')}"></div>
-      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="claim">${t('claim_btn')}</button></div><p class="sub" id="amsg"></p>`;
+      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="claim">${t('claim_btn')}</button></div>
+    <div class="card"><h2>${t('reset_title')}</h2><p class="sub">${t('reset_desc')}</p>
+      <input type="text" id="rsemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="text" id="rscode" maxlength="8" placeholder="${t('reset_code_ph')}"></div>
+      <div class="row"><input type="password" id="rspw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button id="rsgo">${t('reset_btn')}</button></div><p class="sub" id="amsg"></p>`;
   if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; render(); };
   const go = (path, body) => async () => {
     $('#amsg').textContent = t('processing');
@@ -375,4 +382,5 @@ function renderAccount(app) {
   $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
   $('#signup').onclick = go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value }));
   $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
+  $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));
 }

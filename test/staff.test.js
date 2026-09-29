@@ -160,3 +160,32 @@ test('AI 시간표·진단서 (목 API) 및 키 없을 때', async () => {
   const nd = await post('/api/diagnosis', { group: 'high' }, undefined, 'vi');
   assert.equal(nd.status, 503); assert.match(nd.error, /ANTHROPIC_API_KEY/);
 });
+
+test('비밀번호 재설정: 강사/관리자 발급 코드(일회용·24시간)', async () => {
+  const c = await post('/api/signup', { email: 'forget@x.co', password: 'oldpassword1', name: '잊은이' });
+  const old = c.token;
+  const a = (await post('/api/login', { email: 'admin@x.co', password: 'adminpass1' })).token;
+  const stu = await post('/api/students', { name: '내 학생' }, a); // 관리자가 만든 미활성 학생: 이메일 없음 → 코드 발급 불가
+  assert.equal((await post(`/api/users/${stu.id}/reset-code`, {}, a)).status, 400);
+  assert.equal((await post(`/api/users/${c.user.id}/reset-code`, {}, c.token)).status, 403); // 본인(학습자)은 발급 불가
+  assert.equal((await api('GET', '/api/accounts?q=forg', undefined, c.token)).status, 403);
+  const found = await get('/api/accounts?q=forg', a);
+  assert.equal(found.accounts.length, 1); assert.equal(found.accounts[0].email, 'forget@x.co');
+  const issued = await post(`/api/users/${c.user.id}/reset-code`, {}, a);
+  assert.equal(issued.status, 200); assert.match(issued.code, /^[A-Z0-9]{8}$/);
+  assert.equal((await post('/api/reset', { email: 'forget@x.co', code: 'WRONG123', password: 'newpassword1' })).status, 400);
+  assert.equal((await post('/api/reset', { email: 'forget@x.co', code: issued.code, password: 'short' })).status, 400);
+  const ok = await post('/api/reset', { email: 'forget@x.co', code: issued.code.toLowerCase(), password: 'newpassword1' });
+  assert.equal(ok.status, 200); assert.ok(ok.token);
+  assert.equal((await get('/api/me', old)).status, 401); // 기존 로그인 해제
+  assert.equal((await post('/api/login', { email: 'forget@x.co', password: 'oldpassword1' })).status, 401);
+  assert.equal((await post('/api/login', { email: 'forget@x.co', password: 'newpassword1' })).status, 200);
+  assert.equal((await post('/api/reset', { email: 'forget@x.co', code: issued.code, password: 'another-pass1' })).status, 400); // 일회용
+  // 강사는 담당 학생(이메일 있는 계정)에게만 발급
+  const t = (await post('/api/staff', { email: 'rt@x.co', password: 'teacherpw1', name: '재설정강사', role: 'teacher' }, a));
+  const tt = (await post('/api/login', { email: 'rt@x.co', password: 'teacherpw1' })).token;
+  assert.equal((await post(`/api/users/${c.user.id}/reset-code`, {}, tt)).status, 403); // 담당이 아니면 불가
+  const g = await post('/api/signup', { email: 'guard@x.co', password: 'password1', name: '보호자', role: 'guardian' });
+  assert.equal((await post(`/api/users/${g.user.id}/reset-code`, {}, tt)).status, 403);
+  assert.equal((await post(`/api/users/${g.user.id}/reset-code`, {}, a)).status, 200); // 관리자는 보호자 계정도 가능
+});

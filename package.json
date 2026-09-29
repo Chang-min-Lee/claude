@@ -1,8 +1,14 @@
 {
   "name": "jinro-ai",
   "version": "0.1.0",
-  "description": "전 연령 진로탐색·학습관리 AI 코치",
-  "scripts": { "start": "node server.js",
-    "test": "node --test test/*.test.js" },
-  "engines": { "node": ">=18" }
+  "description": "전 연령 진로탐색·종합검사·학습관리·강사 콘솔 (한국어/베트남어)",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js",
+    "backup": "node scripts/backup.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
 }

@@ -102,6 +102,7 @@ function renderRegister(app) {
 
 // ---------- 강사 관리 (관리자) ----------
 const stf = { list: [], loaded: false, loading: false, edit: null, msg: '', del: null };
+const afind = { q: '', list: null, msg: '' };
 async function loadStaff() {
   stf.loading = true;
   try { stf.list = (await api('/api/staff')).staff; stf.msg = ''; } catch (e) { stf.msg = e.message; }
@@ -119,8 +120,14 @@ function renderStaffMgmt(app) {
       ${e === 'new' ? `<div class="row"><input type="text" id="sfemail" placeholder="${t('email_ph')}"></div>` : `<p class="sub">${esc(e.email)}</p>`}
       <div class="row"><input type="password" id="sfpw" placeholder="${e === 'new' ? t('pw_new_ph') : t('staff_pw_reset')}" autocomplete="new-password"></div>
       <div class="row"><select id="sfrole"><option value="teacher" ${e !== 'new' && e.role === 'teacher' ? 'selected' : ''}>${t('role_teacher')}</option><option value="admin" ${e !== 'new' && e.role === 'admin' ? 'selected' : ''}>${t('role_admin')}</option></select></div>
-      <button class="primary" id="sfsave">${t('btn_save')}</button> <button id="sfcancel">${t('btn_cancel')}</button></div>` : ''}`;
+      <button class="primary" id="sfsave">${t('btn_save')}</button> <button id="sfcancel">${t('btn_cancel')}</button></div>` : ''}
+    <div class="card"><h2>${t('acct_find_title')}</h2>
+      <div class="row"><input type="text" id="afq" maxlength="40" placeholder="${t('acct_find_ph')}" value="${esc(afind.q)}"><button id="afgo">${t('acct_find_btn')}</button></div>
+      ${afind.list === null ? '' : afind.list.length ? afind.list.map((x) => `<div class="task"><span><b>${esc(x.name)}</b> <span class="tag">${t('role_' + x.role)}</span><br><span class="sub">${esc(x.email)}</span></span><button data-rc="${esc(x.id)}">${t('reset_issue')}</button></div>`).join('') : `<p class="sub">${t('acct_none')}</p>`}
+      <p id="afmsg">${esc(afind.msg)}</p></div>`;
   $('#snew').onclick = () => { stf.edit = 'new'; render(); };
+  $('#afgo').onclick = async () => { afind.q = $('#afq').value; afind.msg = ''; try { afind.list = (await api('/api/accounts?q=' + encodeURIComponent(afind.q))).accounts; } catch (er) { afind.list = null; afind.msg = er.message; } render(); };
+  app.querySelectorAll('[data-rc]').forEach((b2) => (b2.onclick = async () => { try { const r = await api(`/api/users/${b2.dataset.rc}/reset-code`, { method: 'POST' }); afind.msg = t('reset_issued', { name: r.name, code: r.code }); } catch (er) { afind.msg = er.message; } render(); }));
   app.querySelectorAll('[data-edit]').forEach((b) => (b.onclick = () => { stf.edit = stf.list.find((s) => s.id === b.dataset.edit); render(); }));
   app.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { stf.del = b.dataset.del; render(); }));
   app.querySelectorAll('[data-delno]').forEach((b) => (b.onclick = () => { stf.del = null; render(); }));

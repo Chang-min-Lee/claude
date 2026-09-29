@@ -1,0 +1,16 @@
+# Render.com 블루프린트: 저장소를 연결하면 이 설정으로 배포돼요. (영구 디스크는 유료 플랜에서 제공되니 요금제를 확인하세요)
+services:
+  - type: web
+    name: jinro-ai
+    runtime: docker
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      - { key: DATA_DIR, value: /data }
+      - { key: TRUST_PROXY, value: "1" }
+      - { key: ADMIN_EMAIL, sync: false }
+      - { key: ADMIN_PASSWORD, sync: false }
+      - { key: ANTHROPIC_API_KEY, sync: false }

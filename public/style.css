@@ -107,3 +107,5 @@ input[type=date] { font:inherit; padding:8px 10px; border:1px solid var(--line);
   .letterhead { background:#fff; border-bottom:2px solid #000; } .letterhead .org, .docsec h3, .statgrid b { color:#000; }
   .card { border:0; } button { display:none !important; }
 }
+table.wplan td button { white-space:nowrap; }
+.pill { white-space:nowrap; }
