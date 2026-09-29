@@ -54,7 +54,9 @@ const store = {
   set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
 };
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const today = () => new Date().toISOString().slice(0, 10);
+const pad = (n) => String(n).padStart(2, '0');
+const dk = (d = new Date()) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => dk();
 
 let state = {
   profile: store.get('profile', null),
@@ -62,9 +64,43 @@ let state = {
   tasks: store.get('tasks', []),
   log: store.get('log', {}), // { 'YYYY-MM-DD': 공부 분 }
   chat: store.get('chat', []),
+  quiz: store.get('quiz', []), // [{date, subject, score, total}]
+  token: store.get('token', null),
+  user: null,
   tab: 'home',
 };
-const save = (k) => store.set(k, state[k]);
+const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz'];
+let pushTimer;
+function schedulePush() {
+  if (!state.token || state.user?.role !== 'learner') return;
+  clearTimeout(pushTimer);
+  pushTimer = setTimeout(() => api('/api/data', { method: 'PUT', body: { data: Object.fromEntries(SYNC.map((k) => [k, state[k]])) } }).catch(() => {}), 800);
+}
+const save = (k) => { store.set(k, state[k]); if (SYNC.includes(k)) schedulePush(); };
+
+async function api(path, { method = 'GET', body } = {}) {
+  const r = await fetch(path, { method, headers: { 'Content-Type': 'application/json', ...(state.token && { Authorization: 'Bearer ' + state.token }) }, body: body && JSON.stringify(body) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || '요청에 실패했어요.');
+  return j;
+}
+function adopt(data) { SYNC.forEach((k) => { if (data[k] !== undefined && data[k] !== null) { state[k] = data[k]; store.set(k, data[k]); } }); }
+async function afterAuth(res) {
+  state.token = res.token; state.user = res.user; store.set('token', res.token);
+  if (res.user.role === 'guardian') { state.tab = 'dash'; return; }
+  const me = await api('/api/me');
+  if (me.data.profile) adopt(me.data); else schedulePush(); // 서버에 기존 데이터가 있으면 그것을 사용, 없으면 이 기기 데이터를 올림
+  state.tab = 'home';
+}
+async function boot() {
+  if (state.token) {
+    try {
+      const me = await api('/api/me'); state.user = me.user;
+      if (me.user.role === 'learner') { if (me.data.profile) adopt(me.data); else schedulePush(); } else state.tab = 'dash';
+    } catch { state.token = null; store.set('token', null); }
+  }
+  render();
+}
 
 // ---- 계산 ----
 function scores() {
@@ -80,8 +116,8 @@ function topTypes() {
 function streak() {
   let n = 0;
   const d = new Date();
-  if (!state.log[d.toISOString().slice(0, 10)]) d.setDate(d.getDate() - 1); // 오늘 아직 안 했어도 어제까지 이어졌으면 유지
-  while (state.log[d.toISOString().slice(0, 10)]) { n++; d.setDate(d.getDate() - 1); }
+  if (!state.log[dk(d)]) d.setDate(d.getDate() - 1); // 오늘 아직 안 했어도 어제까지 이어졌으면 유지
+  while (state.log[dk(d)]) { n++; d.setDate(d.getDate() - 1); }
   return n;
 }
 function profileForAI() {
@@ -90,13 +126,20 @@ function profileForAI() {
 }
 
 // ---- 화면 ----
+const LEARNER_TABS = [['home', '홈'], ['explore', '진로탐색'], ['study', '학습관리'], ['quiz', '퀴즈'], ['coach', 'AI 코치'], ['account', '계정']];
+const GUARDIAN_TABS = [['dash', '대시보드'], ['account', '계정']];
 function render() {
   const app = $('#app');
-  document.body.classList.toggle('kid', state.profile?.group === 'elementary');
-  $('#nav').hidden = !state.profile;
-  document.querySelectorAll('nav button').forEach((b) => b.classList.toggle('on', b.dataset.tab === state.tab));
-  if (!state.profile) return renderOnboarding(app);
-  ({ home: renderHome, explore: renderExplore, study: renderStudy, coach: renderCoach }[state.tab])(app);
+  const guardian = state.user?.role === 'guardian';
+  document.body.classList.toggle('kid', !guardian && state.profile?.group === 'elementary');
+  const tabs = guardian ? GUARDIAN_TABS : LEARNER_TABS;
+  if (guardian && !tabs.some(([k]) => k === state.tab)) state.tab = 'dash';
+  const onboarding = !guardian && !state.profile;
+  $('#nav').hidden = onboarding;
+  $('#nav').innerHTML = tabs.map(([k, l]) => `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${l}</button>`).join('');
+  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); }));
+  if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
+  ({ home: renderHome, explore: renderExplore, study: renderStudy, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash }[state.tab] || renderHome)(app);
 }
 
 function renderOnboarding(app) {
@@ -105,7 +148,9 @@ function renderOnboarding(app) {
     <label>이름(별명)<input type="text" id="name" maxlength="20" placeholder="예: 민지"></label><br><br>
     <label>나는<select id="group">${Object.entries(GROUPS).map(([k, g]) => `<option value="${k}">${g.label}</option>`).join('')}</select></label><br><br>
     <button class="primary" id="start">시작하기</button>
-    <p class="sub">입력한 정보는 이 기기의 브라우저에만 저장돼요.</p></div>`;
+    <p class="sub">로그인하지 않으면 입력한 정보는 이 기기의 브라우저에만 저장돼요.</p>
+    <p>이미 계정이 있거나 보호자·교사이신가요? <button id="tologin">로그인 / 가입</button></p></div>`;
+  $('#tologin').onclick = () => { state.tab = 'account'; render(); };
   $('#start').onclick = () => {
     state.profile = { name: $('#name').value.trim() || '친구', group: $('#group').value };
     save('profile'); render();
@@ -124,10 +169,14 @@ function renderHome(app) {
       ? `<p>내 흥미 유형: ${topTypes().map((t) => `<span class="tag">${RIASEC[t].name}</span>`).join('')}</p>`
       : `<p class="sub">아직 흥미검사를 하지 않았어요. (${answered()}/${QUESTIONS.length})</p>`}
       <button class="primary" data-go="explore">${done ? '결과 보기' : '검사 시작'}</button></div>
+    ${state.quiz.length ? `<div class="card"><h2>최근 퀴즈</h2>${state.quiz.slice(-3).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(q.subject)} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}
     <div class="card"><h2>오늘의 한 걸음</h2><ul>${NEXT[g].map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>
-    <div class="card"><button data-go="study">학습관리</button> <button data-go="coach">AI 코치와 상담</button> <button id="reset">처음부터</button></div>`;
+    <div class="card"><button data-go="study">학습관리</button> <button data-go="quiz">퀴즈</button> <button data-go="coach">AI 코치와 상담</button> <button id="reset">처음부터</button></div>`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
-  $('#reset').onclick = () => { if (confirm('모든 데이터를 지우고 처음부터 시작할까요?')) { localStorage.clear(); state = { profile: null, answers: {}, tasks: [], log: {}, chat: [], tab: 'home' }; render(); } };
+  $('#reset').onclick = () => { if (confirm('학습 데이터를 모두 지우고 처음부터 시작할까요? (로그인 상태면 서버 데이터도 지워져요)')) {
+      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], tab: 'home' });
+      SYNC.forEach(save); render();
+    } };
 }
 
 function renderExplore(app) {
@@ -154,11 +203,16 @@ function renderExplore(app) {
 }
 
 function renderStudy(app) {
-  const week = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); const k = d.toISOString().slice(0, 10); return { day: '일월화수목금토'[d.getDay()], m: state.log[k] || 0 }; });
+  const week = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); const k = dk(d); return { day: '일월화수목금토'[d.getDay()], m: state.log[k] || 0 }; });
   const max = Math.max(60, ...week.map((w) => w.m));
   app.innerHTML = `<div class="card"><h2>학습 목표 / 할 일</h2>
       <div class="row"><input type="text" id="newtask" placeholder="예: 영어 단어 30개 외우기" maxlength="80"><button class="primary" id="add">추가</button></div>
       ${state.tasks.length ? state.tasks.map((t, i) => `<div class="task ${t.done ? 'done' : ''}"><input type="checkbox" data-i="${i}" ${t.done ? 'checked' : ''}><span>${esc(t.text)}</span><button data-del="${i}">✕</button></div>`).join('') : '<p class="sub">아직 목표가 없어요. 오늘 할 일부터 적어 볼까요?</p>'}</div>
+    <div class="card"><h2>AI 학습 계획 만들기</h2>
+      <p class="sub">목표와 기간을 알려 주면 주차별 할 일을 만들어 목록에 추가해요.</p>
+      <input type="text" id="pgoal" maxlength="100" placeholder="예: 3주 안에 분수 계산 익히기 / 토익 800점">
+      <div class="row"><select id="pweeks">${[1, 2, 3, 4, 6, 8, 12].map((w) => `<option value="${w}" ${w === 4 ? 'selected' : ''}>${w}주</option>`).join('')}</select><input type="number" id="phours" min="1" max="40" value="5" style="max-width:90px"><span class="sub">시간/주</span><button class="primary" id="pmake">계획 만들기</button></div>
+      <p class="sub" id="pmsg"></p></div>
     <div class="card"><h2>공부 시간 기록</h2>
       <div class="row"><input type="number" id="mins" min="1" max="600" placeholder="분"><button class="primary" id="log">기록</button><button id="timer">⏱ 25분 타이머</button></div>
       <p class="sub" id="timerout"></p>
@@ -167,6 +221,17 @@ function renderStudy(app) {
   $('#add').onclick = addTask; $('#newtask').onkeydown = (e) => e.key === 'Enter' && addTask();
   app.querySelectorAll('[data-i]').forEach((c) => (c.onchange = () => { state.tasks[c.dataset.i].done = c.checked; save('tasks'); render(); }));
   app.querySelectorAll('[data-del]').forEach((b) => (b.onclick = () => { state.tasks.splice(b.dataset.del, 1); save('tasks'); render(); }));
+  $('#pmake').onclick = async () => {
+    const goal = $('#pgoal').value.trim(); if (!goal) { $('#pmsg').textContent = '목표를 입력해 주세요.'; return; }
+    $('#pmake').disabled = true; $('#pmsg').textContent = '계획을 만드는 중…';
+    try {
+      const r = await api('/api/plan', { method: 'POST', body: { goal, weeks: +$('#pweeks').value, hours: +$('#phours').value, group: state.profile.group } });
+      state.tasks = [...r.tasks.map((t) => ({ text: `[${t.week}주차] ${t.text}`, done: false })), ...state.tasks]; save('tasks');
+      state.notice = `${r.tasks.length}개의 할 일을 추가했어요.${r.ai ? '' : ' (AI 키가 없어 기본 템플릿으로 만들었어요)'}`;
+      render();
+    } catch (e) { $('#pmsg').textContent = e.message; $('#pmake').disabled = false; }
+  };
+  if (state.notice) { $('#pmsg').textContent = state.notice; state.notice = null; }
   const addMin = (m) => { state.log[today()] = (state.log[today()] || 0) + m; save('log'); render(); };
   $('#log').onclick = () => { const m = parseInt($('#mins').value, 10); if (m > 0) addMin(Math.min(m, 600)); };
   $('#timer').onclick = () => {
@@ -204,5 +269,98 @@ function renderCoach(app) {
   $('#clr').onclick = () => { state.chat = []; save('chat'); render(); };
 }
 
-document.querySelectorAll('nav button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); }));
-render();
+// ---- 퀴즈 ----
+let qz = null; // { subject, questions, i, picked, score, done }
+function renderQuiz(app) {
+  if (qz && !qz.done) {
+    const q = qz.questions[qz.i], answered = qz.picked !== null;
+    app.innerHTML = `<div class="card"><h2>${esc(qz.subject)} 퀴즈 (${qz.i + 1}/${qz.questions.length})</h2><p><b>${esc(q.q)}</b></p>
+      ${q.choices.map((c, k) => `<button data-k="${k}" style="display:block;width:100%;text-align:left;margin:6px 0;${answered && k === q.answer ? 'border-color:var(--ok);background:var(--main2)' : ''}" ${answered ? 'disabled' : ''}>${'①②③④'[k]} ${esc(c)}${answered && k === qz.picked ? (k === q.answer ? ' ✅' : ' ❌') : ''}</button>`).join('')}
+      ${answered ? `<p>${qz.picked === q.answer ? '정답이에요! 🎉' : '아쉬워요, 정답은 ' + '①②③④'[q.answer] + ' 이에요.'}</p><p class="sub">${esc(q.explain)}</p><button class="primary" id="next">${qz.i + 1 < qz.questions.length ? '다음 문제' : '결과 보기'}</button>` : ''}</div>`;
+    app.querySelectorAll('[data-k]').forEach((b) => (b.onclick = () => { qz.picked = +b.dataset.k; if (qz.picked === q.answer) qz.score++; render(); }));
+    if (answered) $('#next').onclick = () => {
+      if (qz.i + 1 < qz.questions.length) { qz.i++; qz.picked = null; } else {
+        qz.done = true; state.quiz.push({ date: today(), subject: qz.subject, score: qz.score, total: qz.questions.length }); save('quiz');
+      }
+      render();
+    };
+    return;
+  }
+  const done = qz?.done ? `<div class="card"><h2>결과: ${qz.score} / ${qz.questions.length}</h2><p>${qz.score === qz.questions.length ? '만점이에요! 대단해요 🏆' : qz.score >= qz.questions.length / 2 ? '잘했어요! 틀린 부분을 한 번 더 복습해 볼까요?' : '괜찮아요, 틀린 문제가 가장 좋은 공부 재료예요. 다시 도전해 봐요!'}</p></div>` : '';
+  app.innerHTML = `${done}<div class="card"><h2>AI 퀴즈</h2><p class="sub">공부한 과목이나 주제를 입력하면 ${LEVEL_LABEL[state.profile.group]} 수준의 객관식 문제를 만들어요.</p>
+    <input type="text" id="subj" maxlength="40" placeholder="예: 분수의 덧셈 / 조선 후기 역사 / 엑셀 함수">
+    <div class="row"><select id="cnt"><option>3</option><option selected>5</option><option>10</option></select><span class="sub">문제</span><button class="primary" id="go">퀴즈 시작</button></div><p class="sub" id="qmsg"></p></div>
+    ${state.quiz.length ? `<div class="card"><h2>퀴즈 기록</h2>${state.quiz.slice(-8).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(q.subject)} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}`;
+  $('#go').onclick = async () => {
+    const subject = $('#subj').value.trim(); if (!subject) { $('#qmsg').textContent = '주제를 입력해 주세요.'; return; }
+    $('#go').disabled = true; $('#qmsg').textContent = '문제를 만드는 중…';
+    try {
+      const r = await api('/api/quiz', { method: 'POST', body: { subject, count: +$('#cnt').value, group: state.profile.group } });
+      qz = { subject, questions: r.questions, i: 0, picked: null, score: 0, done: false }; render();
+    } catch (e) { $('#qmsg').textContent = e.message; $('#go').disabled = false; }
+  };
+}
+const LEVEL_LABEL = { elementary: '초등학생', middle: '중학생', high: '고등학생', college: '대학생', adult: '성인' };
+
+// ---- 계정 ----
+function renderAccount(app) {
+  if (state.user) {
+    const learner = state.user.role === 'learner';
+    app.innerHTML = `<div class="card"><h2>${esc(state.user.name)}님 (${learner ? '학습자' : '보호자/교사'})</h2>
+      <p class="sub">${learner ? '학습 데이터가 자동으로 서버에 저장되어 다른 기기에서도 이어서 쓸 수 있어요.' : '연결된 학습자의 학습 요약을 대시보드에서 볼 수 있어요.'}</p><button id="logout">로그아웃</button></div>
+      ${learner ? `<div class="card"><h2>보호자·교사 연결</h2><p>내 연결 코드: <b style="font-size:1.3em;letter-spacing:2px">${esc(state.user.shareCode)}</b></p>
+        <p class="sub">이 코드를 알려 주면 보호자/교사가 나의 <b>학습 요약</b>(공부 시간, 목표, 흥미검사 결과, 퀴즈 점수)을 볼 수 있어요. AI 코치와 나눈 대화는 보이지 않아요.</p>
+        <button id="regen">코드 다시 만들기</button><div id="glist" class="sub" style="margin-top:10px">불러오는 중…</div></div>` : ''}`;
+    $('#logout').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch {} state.token = null; state.user = null; store.set('token', null); state.tab = 'home'; render(); };
+    if (learner) {
+      $('#regen').onclick = async () => { state.user.shareCode = (await api('/api/regen-code', { method: 'POST' })).shareCode; render(); };
+      api('/api/guardians').then(({ guardians }) => {
+        const el = $('#glist'); if (!el) return;
+        el.innerHTML = guardians.length ? '연결된 분: ' + guardians.map((g) => `${esc(g.name)} <button data-u="${esc(g.id)}">연결 해제</button>`).join(' ') : '연결된 보호자/교사가 없어요.';
+        el.querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { await api('/api/unlink', { method: 'POST', body: { id: b.dataset.u } }); render(); }));
+      }).catch(() => {});
+    }
+    return;
+  }
+  app.innerHTML = `${state.profile ? '' : '<button id="back">← 처음으로</button>'}
+    <div class="card"><h2>로그인</h2><input type="text" id="lemail" placeholder="이메일" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="비밀번호" autocomplete="current-password" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"></div><button class="primary" id="login">로그인</button></div>
+    <div class="card"><h2>계정 만들기</h2>
+      <input type="text" id="sname" maxlength="20" placeholder="이름(별명)"><div class="row"><input type="text" id="semail" placeholder="이메일"></div>
+      <div class="row"><input type="password" id="spw" placeholder="비밀번호 (8자 이상)" autocomplete="new-password" style="width:100%;padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)"></div>
+      <div class="row"><select id="srole"><option value="learner">학습자 (학생·성인)</option><option value="guardian">보호자 / 교사</option></select></div>
+      <button class="primary" id="signup">가입하기</button>
+      <p class="sub">만 14세 미만 어린이는 보호자와 함께 가입해 주세요. 가입하면 이 기기의 학습 데이터가 계정에 저장돼요.</p></div><p class="sub" id="amsg"></p>`;
+  if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; render(); };
+  const go = (path, body) => async () => {
+    $('#amsg').textContent = '처리 중…';
+    try { await afterAuth(await api(path, { method: 'POST', body: body() })); render(); } catch (e) { $('#amsg').textContent = e.message; }
+  };
+  $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
+  $('#signup').onclick = go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value }));
+}
+
+// ---- 보호자/교사 대시보드 ----
+function renderDash(app) {
+  app.innerHTML = `<div class="card"><h2>학습자 연결</h2><div class="row"><input type="text" id="code" maxlength="8" placeholder="학습자가 알려준 8자리 코드"><button class="primary" id="link">연결</button></div><p class="sub" id="dmsg"></p></div><div id="learners">불러오는 중…</div>`;
+  $('#link').onclick = async () => {
+    try { const r = await api('/api/link', { method: 'POST', body: { code: $('#code').value } }); state.notice = `${r.name}님과 연결했어요.`; render(); } catch (e) { $('#dmsg').textContent = e.message; }
+  };
+  if (state.notice) { $('#dmsg').textContent = state.notice; state.notice = null; }
+  api('/api/dashboard?today=' + today()).then(({ learners }) => {
+    const el = $('#learners'); if (!el) return;
+    if (!learners.length) { el.innerHTML = '<p class="sub">아직 연결된 학습자가 없어요. 학습자의 [계정] 탭에서 연결 코드를 받아 입력해 주세요.</p>'; return; }
+    el.innerHTML = learners.map((l) => {
+      const max = Math.max(60, ...l.week), days = [...Array(7)].map((_, i) => { const d = new Date(); d.setDate(d.getDate() - (6 - i)); return '일월화수목금토'[d.getDay()]; });
+      const avg = l.quiz.length ? Math.round(l.quiz.reduce((a, q) => a + q.score / q.total, 0) / l.quiz.length * 100) : null;
+      return `<div class="card"><h2>${esc(l.name)} <span class="sub">${esc(LEVEL_LABEL[l.group] || '')}</span> <button data-u="${esc(l.id)}" style="float:right">연결 해제</button></h2>
+        <div class="stats"><div><b>${l.streak}일</b><span class="sub">연속 학습</span></div><div><b>${l.today}분</b><span class="sub">오늘</span></div><div><b>${l.week.reduce((a, b) => a + b, 0)}분</b><span class="sub">최근 7일</span></div></div>
+        <div class="week" style="margin-top:12px">${l.week.map((m, i) => `<div><i style="height:${m / max * 80}px"></i>${days[i]}<br>${m}</div>`).join('')}</div>
+        <p>목표: 완료 ${l.doneCount}개 · 진행 중 ${l.openCount}개</p>${l.openTasks.length ? `<ul>${l.openTasks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
+        <p>흥미 유형: ${l.riasec.length ? l.riasec.map((t) => `<span class="tag">${esc(RIASEC[t].name)}</span>`).join('') : '<span class="sub">검사 전</span>'}</p>
+        <p>퀴즈 평균: ${avg === null ? '<span class="sub">기록 없음</span>' : avg + '점'}</p></div>`;
+    }).join('');
+    el.querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { if (confirm('연결을 해제할까요?')) { await api('/api/unlink', { method: 'POST', body: { id: b.dataset.u } }); render(); } }));
+  }).catch((e) => { const el = $('#learners'); if (el) el.textContent = e.message; });
+}
+
+boot();
