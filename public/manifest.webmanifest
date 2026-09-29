@@ -1,0 +1,16 @@
+{
+  "name": "진로AI 코치",
+  "short_name": "진로AI",
+  "description": "진로탐색·종합검사·학습관리 (한국어/Tiếng Việt)",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0B7A75",
+  "background_color": "#F2F5F8",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

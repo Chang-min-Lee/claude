@@ -9,9 +9,9 @@ const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-5-5';
 const API_BASE = process.env.ANTHROPIC_BASE_URL || 'https://api.anthropic.com';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const { sanitizers, sanitizeData, DATA_KEYS, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
+const { sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -52,6 +52,7 @@ const M = {
     diagNeedKey: 'AI 진단서는 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (아래의 기본 해석은 키 없이도 볼 수 있어요.)', forbidden: '접근 권한이 없어요.', notFound: '찾을 수 없어요.', staffOnly: '강사/관리자 전용이에요.', adminOnly: '관리자 전용이에요.',
     lastAdmin: '마지막 남은 관리자 계정은 변경하거나 삭제할 수 없어요.', roleBad: '역할이 올바르지 않아요.', notManaged: '강사가 등록한 학생만 활성화할 수 있어요.', dataTooBig: '저장할 데이터가 너무 커요.', selfDelete: '내 계정은 여기서 삭제할 수 없어요. 계정 탭을 이용해 주세요.',
     resetBad: '재설정 코드가 올바르지 않거나 만료됐어요.', noReset: '이메일 계정이 있는 사용자만 재설정 코드를 발급할 수 있어요.',
+    msgEmpty: '메시지를 입력해 주세요.', noNote: '내용을 입력해 주세요.',
     noKeyChat: 'AI 코치를 쓰려면 서버에 ANTHROPIC_API_KEY 환경변수를 설정해 주세요. (진로검사·학습관리는 키 없이도 사용할 수 있어요.)',
   },
   vi: {
@@ -65,6 +66,7 @@ const M = {
     diagNeedKey: 'Bản chẩn đoán AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản bên dưới vẫn xem được khi không có khóa.)', forbidden: 'Bạn không có quyền truy cập.', notFound: 'Không tìm thấy.', staffOnly: 'Chỉ dành cho giáo viên/quản trị viên.', adminOnly: 'Chỉ dành cho quản trị viên.',
     lastAdmin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', roleBad: 'Vai trò không hợp lệ.', notManaged: 'Chỉ học viên do giáo viên đăng ký mới có thể kích hoạt.', dataTooBig: 'Dữ liệu cần lưu quá lớn.', selfDelete: 'Không thể xóa tài khoản của chính bạn ở đây. Hãy dùng tab Tài khoản.',
     resetBad: 'Mã đặt lại không đúng hoặc đã hết hạn.', noReset: 'Chỉ có thể cấp mã đặt lại cho người dùng đã có tài khoản email.',
+    msgEmpty: 'Vui lòng nhập tin nhắn.', noNote: 'Vui lòng nhập nội dung.',
     noKeyChat: 'Để dùng AI, hãy cài biến môi trường ANTHROPIC_API_KEY trên máy chủ. (Trắc nghiệm sở thích và quản lý học tập vẫn dùng được khi không có khóa.)',
   },
 };
@@ -126,8 +128,9 @@ function learnerOr404(actor, id, write = false) {
 // 다른 사람이 볼 때의 데이터: 상담 대화는 절대 공개하지 않고, 정서웰빙은 본인 동의가 있을 때 강사/관리자에게만 공개한다.
 function dataFor(actor, learner) {
   const d = { ...(learner.data || {}) };
-  if (actor.id === learner.id) return d;
+  if (actor.id === learner.id) { delete d.counsel; return d; } // 상담일지는 강사용 내부 기록
   delete d.chat;
+  if (!isStaff(actor)) { delete d.messages; delete d.counsel; }
   const showWb = isStaff(actor) && !!d.consent?.wellbeing;
   if (d.deep && !showWb) { d.deep = { ...d.deep }; delete d.deep.wellbeing; }
   return d;
@@ -310,6 +313,7 @@ function summarize(u, todayStr, viewer) {
     riasec: top, quiz: (d.quiz || []).slice(-5), deep,
     teacher: t ? { id: t.id, name: t.name } : null, lastActive, checkinsWeek, goal: { type: goal.type || 'general', label: goal.label || '', dday },
     intensity: sdl === undefined ? null : sdl >= 3.8 ? 'loose' : sdl >= 3.0 ? 'normal' : 'tight',
+    awaiting: !!(viewer && isStaff(viewer) && d.messages?.at(-1)?.from === 'learner'),
     flags, status: idle || validity || wellbeing ? 'watch' : 'ok',
   };
 }
@@ -354,7 +358,7 @@ const routes = {
     if (t) { delete db.sessions[sha(t)]; store.removeSession(sha(t)); }
     return { ok: true };
   },
-  'GET /api/me': async (req) => { const u = needUser(req); return { user: publicUser(u), data: u.data || {} }; },
+  'GET /api/me': async (req) => { const u = needUser(req); const d = { ...(u.data || {}) }; delete d.counsel; const t = u.role === 'learner' ? teacherOf(u.id) : null; return { user: publicUser(u), data: d, teacher: t ? { id: t.id, name: t.name } : null }; },
   'PUT /api/data': async (req) => {
     const u = needUser(req);
     if (u.role !== 'learner') throw new HttpError(403, 'learnerOnly');
@@ -383,7 +387,8 @@ const routes = {
   },
   'GET /api/export': async (req) => { // 개인정보 열람·이동권: 내 계정 정보와 데이터 전체
     const u = needUser(req);
-    return { account: { name: u.name, email: u.email, role: u.role }, data: u.data || {} };
+    const d = { ...(u.data || {}) }; delete d.counsel; // 강사의 내부 상담일지는 본인 내보내기에 포함하지 않는다
+    return { account: { name: u.name, email: u.email, role: u.role }, data: d };
   },
   'POST /api/regen-code': async (req) => { const u = needUser(req); u.shareCode = newCode(); persist(u); return { shareCode: u.shareCode }; },
   'POST /api/link': async (req) => {
@@ -506,6 +511,40 @@ const routes = {
 
 // ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
 const paramRoutes = [
+  ['POST', /^\/api\/students\/([\w-]+)\/messages$/, async (req, url, [id]) => { // 학습자 본인 ↔ 담당 강사/관리자 (보호자는 불가)
+    const u = needUser(req), l = learnerOr404(u, id, true);
+    if (!(u.id === l.id || isStaff(u))) throw new HttpError(403, 'forbidden');
+    limit('msg:' + u.id, 30, 10 * 60000);
+    const text = clipStr((await readBody(req)).text, 500);
+    if (!text) throw new HttpError(400, 'msgEmpty');
+    const msgs = [...(l.data?.messages || []), { id: crypto.randomUUID(), at: new Date().toISOString(), from: u.id === l.id ? 'learner' : 'staff', name: u.name, text }].slice(-200);
+    l.data = { ...l.data, messages: msgs };
+    persist(l);
+    return { messages: msgs };
+  }],
+  ['POST', /^\/api\/students\/([\w-]+)\/counsel$/, async (req, url, [id]) => { // 강사 전용 상담일지
+    const u = needUser(req);
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true), b = await readBody(req);
+    const text = clipStr(b.text, 1000);
+    if (!text) throw new HttpError(400, 'noNote');
+    const entry = { id: crypto.randomUUID(), date: isDate(b.date) ? b.date : dayKey(new Date()), at: new Date().toISOString(), by: u.name, byId: u.id, text };
+    const list = [...(l.data?.counsel || []), entry].slice(-300);
+    l.data = { ...l.data, counsel: list };
+    persist(l);
+    return { counsel: list };
+  }],
+  ['DELETE', /^\/api\/students\/([\w-]+)\/counsel\/([\w-]+)$/, async (req, url, [id, cid]) => {
+    const u = needUser(req);
+    if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true), cur = l.data?.counsel || [], e = cur.find((x) => x.id === cid);
+    if (!e) throw new HttpError(404, 'notFound');
+    if (u.role !== 'admin' && e.byId !== u.id) throw new HttpError(403, 'forbidden'); // 본인이 쓴 기록만 (관리자는 모두)
+    const list = cur.filter((x) => x.id !== cid);
+    l.data = { ...l.data, counsel: list };
+    persist(l);
+    return { counsel: list };
+  }],
   ['GET', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
     const u = needUser(req), l = learnerOr404(u, id);
     const t = teacherOf(l.id);
@@ -516,7 +555,7 @@ const paramRoutes = [
     if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
     const l = learnerOr404(u, id, true);
     const b = await readBody(req);
-    const allowed = DATA_KEYS.filter((k) => k !== 'chat' && !(l.email && k === 'consent')); // 본인 계정 학생의 동의 설정은 강사가 바꿀 수 없다
+    const allowed = CLIENT_KEYS.filter((k) => k !== 'chat' && !(l.email && k === 'consent')); // 본인 계정 학생의 동의 설정은 강사가 바꿀 수 없다
     const clean = sanitizeData(b.data, allowed);
     if ('deep' in clean && !l.data?.consent?.wellbeing) { // 정서웰빙 기록은 동의 없이는 강사 화면에 없으므로, 저장 시 기존 값을 그대로 보존
       const prev = l.data?.deep?.wellbeing;

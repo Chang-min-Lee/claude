@@ -189,3 +189,44 @@ test('비밀번호 재설정: 강사/관리자 발급 코드(일회용·24시간
   assert.equal((await post(`/api/users/${g.user.id}/reset-code`, {}, tt)).status, 403);
   assert.equal((await post(`/api/users/${g.user.id}/reset-code`, {}, a)).status, 200); // 관리자는 보호자 계정도 가능
 });
+
+test('메시지·상담일지: 권한, 덮어쓰기 방지, 비공개 범위', async () => {
+  const adm = (await post('/api/login', { email: 'admin@x.co', password: 'adminpass1' })).token;
+  const tch = (await post('/api/staff', { email: 'msg@x.co', password: 'teacherpw1', name: '메시지강사', role: 'teacher' }, adm)); const tt = (await post('/api/login', { email: 'msg@x.co', password: 'teacherpw1' })).token;
+  const other = (await post('/api/staff', { email: 'other@x.co', password: 'teacherpw1', name: '다른강사', role: 'teacher' }, adm)); const ot = (await post('/api/login', { email: 'other@x.co', password: 'teacherpw1' })).token;
+  const stu = await post('/api/students', { name: '메시지학생' }, tt); const sid = stu.id;
+  const claimed = await post('/api/claim', { code: stu.shareCode, email: 'ms@x.co', password: 'studentpw1' }); const st = claimed.token;
+  const g = await post('/api/signup', { email: 'mg@x.co', password: 'password1', name: '보호자', role: 'guardian' });
+  await post('/api/link', { code: claimed.user.shareCode }, g.token);
+  // 메시지: 학생 → 강사, 강사 → 학생
+  assert.equal((await post(`/api/students/${sid}/messages`, { text: '   ' }, st)).status, 400);
+  const m1 = await post(`/api/students/${sid}/messages`, { text: '선생님, 질문이 있어요' }, st);
+  assert.equal(m1.status, 200); assert.equal(m1.messages.at(-1).from, 'learner');
+  let d = await get(`/api/dashboard?today=${today}`, tt); assert.equal(d.learners[0].awaiting, true); // 답변 대기
+  const m2 = await post(`/api/students/${sid}/messages`, { text: '네, 말씀하세요' }, tt);
+  assert.equal(m2.messages.at(-1).from, 'staff'); assert.equal(m2.messages.at(-1).name, '메시지강사');
+  d = await get(`/api/dashboard?today=${today}`, tt); assert.equal(d.learners[0].awaiting, false);
+  assert.equal((await post(`/api/students/${sid}/messages`, { text: '몰래' }, g.token)).status, 403); // 보호자 불가
+  assert.equal((await post(`/api/students/${sid}/messages`, { text: '남의 학생' }, ot)).status, 403); // 담당 아닌 강사 불가
+  assert.equal((await get('/api/me', st)).data.messages.length, 2); // 학생은 대화를 본다
+  assert.equal((await get(`/api/students/${sid}`, g.token)).data.messages, undefined); // 보호자에게는 숨김
+  // 덮어쓰기 방지: PUT 으로 messages/counsel 을 바꿀 수 없다
+  await put('/api/data', { data: { messages: [], counsel: [{ id: 'x', text: '위조' }] } }, st);
+  await put(`/api/students/${sid}/data`, { data: { messages: [], counsel: [] } }, tt);
+  assert.equal((await get('/api/me', st)).data.messages.length, 2);
+  // 상담일지: 강사 전용
+  assert.equal((await post(`/api/students/${sid}/counsel`, { text: '' }, tt)).status, 400);
+  assert.equal((await post(`/api/students/${sid}/counsel`, { text: '비공개 메모' }, st)).status, 403); // 학생 불가
+  const c1 = await post(`/api/students/${sid}/counsel`, { text: '집중력이 떨어져 보임. 다음 주 면담', date: today }, tt);
+  assert.equal(c1.counsel.length, 1); const cid = c1.counsel[0].id;
+  assert.equal((await get(`/api/students/${sid}`, tt)).data.counsel.length, 1);
+  assert.equal((await get(`/api/students/${sid}`, adm)).data.counsel.length, 1);
+  assert.equal((await get('/api/me', st)).data.counsel, undefined); // 학생에게는 절대 안 보임
+  assert.equal((await get(`/api/students/${sid}`, g.token)).data.counsel, undefined);
+  const ex = await get('/api/export', st); assert.equal(ex.data.counsel, undefined);
+  assert.equal(JSON.stringify(await get('/api/me', st)).includes('집중력'), false);
+  // 삭제: 작성자 또는 관리자만
+  await post('/api/link', { code: claimed.user.shareCode }, ot); // 다른 강사도 담당이 되었다고 가정(링크)
+  assert.equal((await del(`/api/students/${sid}/counsel/${cid}`, ot)).status, 403);
+  assert.equal((await del(`/api/students/${sid}/counsel/${cid}`, tt)).counsel.length, 0);
+});

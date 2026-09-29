@@ -118,6 +118,25 @@ Object.assign(UI.vi, {
   staff_last_admin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', staff_title: 'Quản lý giáo viên', staff_desc: 'Thêm, sửa, xóa tài khoản giáo viên và quản trị viên. Khi xóa giáo viên, dữ liệu học viên phụ trách vẫn được giữ và chuyển thành "Chưa phân công".', staff_add: 'Thêm giáo viên', staff_students: 'Phụ trách {n} học viên', staff_pw_reset: 'Mật khẩu mới (chỉ khi cần đổi)', staff_del_confirm: 'Xác nhận xóa',
 });
 
+Object.assign(UI.ko, {
+  tab_messages: '메시지', tab_counsel: '상담일지', flag_msg: '답변 대기',
+  msg_title: '메시지', msg_help: '담당 강사 {name} 선생님께 질문을 남기면 답변을 받을 수 있어요.', msg_help_staff: '{name} 학생과의 대화예요. 피드백이나 응원을 남겨 주세요. 보호자에게는 보이지 않아요.', msg_no_teacher: '아직 담당 강사가 없어요. 담당 강사가 연결되면 이곳에서 대화할 수 있어요.', msg_empty: '아직 대화가 없어요.', msg_ph: '메시지를 입력하세요',
+  cn_title: '상담일지', cn_help: '강사·관리자만 볼 수 있는 내부 기록이에요. 학생과 보호자에게는 보이지 않아요.', cn_ph: '상담 내용, 관찰한 점, 다음 계획…', cn_empty: '아직 기록이 없어요.', cn_need: '내용을 입력해 주세요.',
+  home_career: '진로·검사', home_comp_progress: '종합검사 {a}/{b}종 완료', heat_title: '학습 달력', heat_hint: '최근 12주 · 색이 진할수록 많이 공부했어요',
+  bd_title: '나의 배지', bd_checkin: '첫 출석', bd_streak3: '3일 연속', bd_streak7: '7일 연속', bd_streak30: '30일 연속', bd_test1: '첫 검사', bd_comp: '종합검사 완료', bd_goal: '목표 세우기', bd_sched: '시간표 만들기', bd_weekplan: '주간 제출', bd_quiz: '첫 퀴즈', bd_hours10: '10시간 공부',
+  theme_auto: '테마: 자동', theme_light: '테마: 라이트', theme_dark: '테마: 다크',
+  csv_btn: 'CSV 내려받기', csv_name: '이름', csv_group: '구분', csv_teacher: '담당', csv_goal: '목표', csv_dday: 'D-day', csv_streak: '연속학습(일)', csv_week: '최근7일(분)', csv_done: '완료 목표', csv_total: '전체 목표', csv_checkin: '이번주 출석', csv_status: '상태', csv_reasons: '사유',
+});
+Object.assign(UI.vi, {
+  tab_messages: 'Tin nhắn', tab_counsel: 'Nhật ký tư vấn', flag_msg: 'Chờ trả lời',
+  msg_title: 'Tin nhắn', msg_help: 'Bạn có thể để lại câu hỏi cho giáo viên phụ trách {name} và nhận câu trả lời.', msg_help_staff: 'Đây là cuộc trò chuyện với học viên {name}. Hãy để lại phản hồi hoặc lời động viên. Phụ huynh không thấy được.', msg_no_teacher: 'Chưa có giáo viên phụ trách. Khi được kết nối, bạn có thể trò chuyện ở đây.', msg_empty: 'Chưa có cuộc trò chuyện nào.', msg_ph: 'Nhập tin nhắn',
+  cn_title: 'Nhật ký tư vấn', cn_help: 'Ghi chú nội bộ chỉ giáo viên/quản trị viên xem được. Học viên và phụ huynh không thấy.', cn_ph: 'Nội dung tư vấn, điều quan sát được, kế hoạch tiếp theo…', cn_empty: 'Chưa có ghi chú.', cn_need: 'Vui lòng nhập nội dung.',
+  home_career: 'Hướng nghiệp · Kiểm tra', home_comp_progress: 'Kiểm tra tổng hợp: xong {a}/{b} bài', heat_title: 'Lịch học tập', heat_hint: '12 tuần gần đây · màu càng đậm càng học nhiều',
+  bd_title: 'Huy hiệu của tôi', bd_checkin: 'Điểm danh đầu tiên', bd_streak3: '3 ngày liên tiếp', bd_streak7: '7 ngày liên tiếp', bd_streak30: '30 ngày liên tiếp', bd_test1: 'Bài kiểm tra đầu tiên', bd_comp: 'Xong kiểm tra tổng hợp', bd_goal: 'Đặt mục tiêu', bd_sched: 'Lập thời khóa biểu', bd_weekplan: 'Nộp kế hoạch tuần', bd_quiz: 'Trắc nghiệm đầu tiên', bd_hours10: 'Học 10 giờ',
+  theme_auto: 'Giao diện: tự động', theme_light: 'Giao diện: sáng', theme_dark: 'Giao diện: tối',
+  csv_btn: 'Tải CSV', csv_name: 'Họ tên', csv_group: 'Nhóm', csv_teacher: 'Phụ trách', csv_goal: 'Mục tiêu', csv_dday: 'D-day', csv_streak: 'Ngày học liên tiếp', csv_week: '7 ngày qua (phút)', csv_done: 'Mục tiêu xong', csv_total: 'Tổng mục tiêu', csv_checkin: 'Điểm danh tuần này', csv_status: 'Trạng thái', csv_reasons: 'Lý do',
+});
+
 // 해석 팁 (종합 결과·진단서의 규칙 기반 문장)
 CONTENT.ko.tips = {
   bigfive: { O: '새로운 분야를 탐색하는 프로젝트·동아리·체험에 도전해 보세요.', C: '계획과 마감을 지키는 강점을 살려 장기 목표를 단계별로 세워 보세요.', E: '발표·토론·팀 활동에서 강점이 드러나요. 사람과 함께하는 진로를 살펴보세요.', A: '협력과 배려가 강점이에요. 팀워크가 중요한 환경에서 빛나요.', N: '스트레스 상황에서도 안정적이에요. 압박이 큰 도전에도 잘 대응할 수 있어요.' },

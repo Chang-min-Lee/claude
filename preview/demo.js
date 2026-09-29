@@ -12,6 +12,8 @@ function demoInit() {
   const mk = (id, name, group, teacherId, extra) => ({ id, name, email: extra.email ?? null, role: 'learner', shareCode: extra.code, teacherId, data: extra.data });
   const students = {
     mai: mk('mai', 'Nguyễn Thị Mai', 'high', 't_kim', { code: 'MAI12345', data: {
+      messages: [{ id: 'm1', at: dAgo(2) + 'T18:20:00Z', from: 'learner', name: 'Nguyễn Thị Mai', text: L('선생님, 쓰기 첨삭은 언제 받을 수 있나요?', 'Cô ơi, khi nào em nhận được bài chấm viết ạ?') }, { id: 'm2', at: dAgo(2) + 'T19:05:00Z', from: 'staff', name: L('김하리 강사', 'Cô Kim Hari'), text: L('내일 수업 전에 보내 줄게요. 듣기 15분도 잊지 마세요!', 'Ngày mai trước giờ học cô sẽ gửi. Đừng quên nghe 15 phút nhé!') }],
+      counsel: [{ id: 'c1', date: dAgo(7), at: dAgo(7) + 'T10:00:00Z', by: L('김하리 강사', 'Cô Kim Hari'), byId: 't_kim', text: L('초기 상담: 유학 동기가 분명함. 듣기·말하기 보강 필요, 주 3회 어휘 점검 합의.', 'Tư vấn ban đầu: động lực du học rõ ràng. Cần bổ sung nghe–nói, thống nhất kiểm tra từ vựng 3 lần/tuần.') }],
       profile: { name: 'Nguyễn Thị Mai', group: 'high', services: { study: true, career: true }, school: L('고2','Lớp 11'), note: L('한국 대학 진학 희망','Muốn học đại học ở Hàn Quốc'), teacherNote: L('어휘 암기를 꾸준히 하고 있어요. 듣기 보강이 필요합니다.','Học từ vựng đều đặn. Cần bổ sung phần nghe.') },
       goal: { type: 'abroad', label: 'TOPIK 4', date: dAhead(42), note: L('10월 정기시험','Kỳ thi định kỳ tháng 10'), milestones: [{ text: L('모의고사 1회','Thi thử lần 1'), date: dAhead(14), done: true }, { text: L('쓰기 첨삭 3회','Chấm bài viết 3 lần'), date: dAhead(28), done: false }] },
       consent: { wellbeing: true },
@@ -23,6 +25,7 @@ function demoInit() {
       grades: [{ subject: L('국어','Ngữ văn'), score: '72', date: dAgo(60), note: '' }, { subject: L('국어','Ngữ văn'), score: '80', date: dAgo(30), note: '' }, { subject: L('수학','Toán'), score: '65', date: dAgo(60), note: '' }, { subject: L('수학','Toán'), score: '78', date: dAgo(30), note: '' }, { subject: L('TOPIK 모의','TOPIK thi thử'), score: '112/200', date: dAgo(20), note: L('3급 후반','Cuối cấp 3') }],
     } }),
     nam: mk('nam', 'Trần Văn Nam', 'middle', 't_kim', { code: 'NAM12345', data: {
+      messages: [{ id: 'm3', at: dAgo(1) + 'T21:40:00Z', from: 'learner', name: 'Trần Văn Nam', text: L('수학 오답노트를 어떻게 정리해야 할지 모르겠어요.', 'Em không biết cách sắp xếp sổ chép lỗi sai môn Toán ạ.') }],
       profile: { name: 'Trần Văn Nam', group: 'middle', services: { study: true, career: true }, school: L('중3','Lớp 9'), note: '', teacherNote: '' },
       goal: { type: 'school', label: L('기말고사','Thi cuối kỳ'), date: dAhead(9), note: '', milestones: [] }, consent: { wellbeing: true },
       deep: { sdl: [demoRes('sdl', [2.4, 2.6, 2.8, 2.1])], wellbeing: [demoRes('wellbeing', [2.2, 2.4, 3, 2])], bigfive: [demoRes('bigfive', [3, 2.6, 2.4, 3.2, 2.5])] },
@@ -68,7 +71,7 @@ function demoSummary(s) { // 서버 summarize 와 같은 규칙
   const wellbeing = !!(isStaffRole() && d.consent?.wellbeing && wb && wb.overall < 3);
   const t = demoTeacher(s.id);
   return { id: s.id, name: s.name, managed: !s.email, group: d.profile?.group || null, streak, week, today: week[6], openTasks: tasks.filter((x) => !x.done).map((x) => x.text).slice(0, 5), doneCount: tasks.filter((x) => x.done).length, openCount: tasks.filter((x) => !x.done).length, riasec: [], quiz: [], deep,
-    teacher: t ? { id: t.id, name: t.name } : null, lastActive: last, checkinsWeek: (d.checkins || []).filter((c) => c.date >= dk(m)).length, goal: { type: d.goal?.type || 'general', label: d.goal?.label || '', dday },
+    teacher: t ? { id: t.id, name: t.name } : null, awaiting: isStaffRole() && d.messages?.at(-1)?.from === 'learner', lastActive: last, checkinsWeek: (d.checkins || []).filter((c) => c.date >= dk(m)).length, goal: { type: d.goal?.type || 'general', label: d.goal?.label || '', dday },
     intensity: sd === undefined ? null : sd >= 3.8 ? 'loose' : sd >= 3.0 ? 'normal' : 'tight', flags: { idle, validity, wellbeing, ddaySoon: dday !== null && dday >= 0 && dday <= 14 }, status: idle || validity || wellbeing ? 'watch' : 'ok' };
 }
 const isStaffRole = () => ['teacher', 'admin'].includes(demoRole());
@@ -80,6 +83,7 @@ function demoApi(path, { method = 'GET', body } = {}) {
   if ((m = p.match(/^\/api\/students\/([\w-]+)$/)) && method === 'GET') {
     const s = demo.students[m[1]]; if (!s || !demoVisible().includes(s)) demoErr(t('req_failed'));
     const d = JSON.parse(JSON.stringify(s.data)); delete d.chat;
+    if (!isStaffRole()) { delete d.messages; delete d.counsel; }
     if (!(isStaffRole() && d.consent?.wellbeing) && d.deep) delete d.deep.wellbeing; // 정서웰빙: 동의한 경우에만 강사에게, 보호자에게는 항상 숨김
     const tt = demoTeacher(s.id);
     return { user: { id: s.id, name: s.name, managed: !s.email, shareCode: isStaffRole() ? s.shareCode : undefined }, data: d, teacher: tt ? { id: tt.id, name: tt.name } : null, canWrite: isStaffRole() };
@@ -88,6 +92,16 @@ function demoApi(path, { method = 'GET', body } = {}) {
     const s = demo.students[m[1]]; if (!s || !isStaffRole()) demoErr(t('req_failed'));
     const keep = s.data.consent?.wellbeing ? null : s.data.deep?.wellbeing; Object.assign(s.data, JSON.parse(JSON.stringify(body.data)));
     if (keep && s.data.deep) s.data.deep.wellbeing = keep; if (body.data.profile?.name) s.name = body.data.profile.name; return { ok: true };
+  }
+  if ((m = p.match(/^\/api\/students\/([\w-]+)\/messages$/)) && method === 'POST') {
+    const s = demo.students[m[1]]; if (!s || !isStaffRole()) demoErr(t('req_failed'));
+    s.data.messages = [...(s.data.messages || []), { id: 'm' + Math.random().toString(36).slice(2, 8), at: new Date().toISOString(), from: 'staff', name: state.user.name, text: String(body.text).slice(0, 500) }]; return { messages: s.data.messages };
+  }
+  if ((m = p.match(/^\/api\/students\/([\w-]+)\/counsel(?:\/([\w-]+))?$/))) {
+    const s = demo.students[m[1]]; if (!s || !isStaffRole()) demoErr(t('req_failed'));
+    if (method === 'POST') s.data.counsel = [...(s.data.counsel || []), { id: 'c' + Math.random().toString(36).slice(2, 8), date: body.date || today(), at: new Date().toISOString(), by: state.user.name, byId: state.user.id, text: String(body.text).slice(0, 1000) }];
+    if (method === 'DELETE') s.data.counsel = (s.data.counsel || []).filter((x) => x.id !== m[2]);
+    return { counsel: s.data.counsel };
   }
   if (p === '/api/students' && method === 'POST') {
     const id = 'n' + Math.random().toString(36).slice(2, 8), code = Math.random().toString(16).slice(2, 10).toUpperCase();

@@ -105,8 +105,8 @@ function compView(body) {
     ${sec(t('int_sec_interest'), it.interest)}${it.careers.length ? `<div class="card"><h2>${t('int_sec_careers')}</h2><p>${it.careers.map((c) => `<span class="tag">${esc(c)}</span>`).join('')}</p><p class="sub">${t('comp_career_note')}</p></div>` : ''}
     ${sec(t('int_sec_style'), it.style)}${sec(t('int_sec_ability'), it.ability)}${sec(t('int_sec_habit'), it.habit)}${sec(t('int_sec_mind'), it.mind)}
     ${ids.length ? `<div class="card"><h2>${t('res_next')}</h2><ul>${C().next[state.profile.group].map((n) => `<li>${esc(n)}</li>`).join('')}</ul></div>` : ''}
-    ${ids.map((id) => testCard(id)).join('')}
-    <p class="sub">${t('comp_disclaimer')}</p>`;
+    <div class="grid2">${ids.map((id) => testCard(id)).join('')}</div>
+    <p class="sub" style="margin-top:14px">${t('comp_disclaimer')}</p>`;
   body.querySelectorAll('[data-goto]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.goto; render(); }));
 }
 

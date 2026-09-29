@@ -26,12 +26,15 @@ const DEFAULTS = {
   consent: { wellbeing: false }, schedule: [], weekplan: [], weekhist: [],
   goal: { type: 'general', label: '', date: '', note: '', milestones: [] },
   grades: [], checkins: [], closeouts: [], diag: {},
+  messages: [], counsel: [], // 서버가 관리(POST 전용) — 화면에서는 읽기만
 };
-const SYNC = Object.keys(DEFAULTS);
+const SERVER_KEYS = ['messages', 'counsel'];
+const SYNC = Object.keys(DEFAULTS).filter((k) => !SERVER_KEYS.includes(k)); // 저장(PUT) 대상
+const LOAD_KEYS = Object.keys(DEFAULTS);
 const normalize = (k, v) => (v === null || v === undefined ? clone(DEFAULTS[k]) : (k === 'goal' || k === 'consent' ? { ...DEFAULTS[k], ...v } : v));
 
 let state = { token: store.get('token', null), user: null, tab: 'home', sub: { plan: 'schedule', report: 'comp' }, viewAs: null, ro: false, notice: null };
-SYNC.forEach((k) => { state[k] = normalize(k, store.get(k, null)); });
+LOAD_KEYS.forEach((k) => { state[k] = normalize(k, SERVER_KEYS.includes(k) ? null : store.get(k, null)); });
 if (state.goal && !Array.isArray(state.goal.milestones)) state.goal.milestones = [];
 
 const dirty = new Set(); // 서버로 아직 보내지 않은 키만 전송해서, 다른 기기·강사가 바꾼 다른 키를 덮어쓰지 않는다
@@ -52,12 +55,12 @@ const save = (k) => {
   if (SYNC.includes(k)) { dirty.add(k); if (saveTarget()) schedulePush(); }
 };
 function loadData(data, persistLocal = false) { // 서버 데이터로 상태를 통째로 교체
-  SYNC.forEach((k) => { state[k] = normalize(k, data?.[k]); if (persistLocal) store.set(k, state[k]); });
+  LOAD_KEYS.forEach((k) => { state[k] = normalize(k, data?.[k]); if (persistLocal && !SERVER_KEYS.includes(k)) store.set(k, state[k]); });
 }
 function adopt(data) { // 아직 보내지 않은 내 변경(dirty)이 없는 키만 서버 값으로 갱신
-  SYNC.forEach((k) => { if (data[k] !== undefined && data[k] !== null && !dirty.has(k)) { state[k] = normalize(k, data[k]); if (!state.viewAs) store.set(k, state[k]); } });
+  LOAD_KEYS.forEach((k) => { if (data[k] !== undefined && data[k] !== null && !dirty.has(k)) { state[k] = normalize(k, data[k]); if (!state.viewAs && !SERVER_KEYS.includes(k)) store.set(k, state[k]); } });
 }
-function clearLocal() { SYNC.forEach((k) => store.set(k, null)); store.set('comp_draft', null); loadData({}); }
+function clearLocal() { SYNC.forEach((k) => store.set(k, null)); store.set('comp_draft', null); state.myTeacher = null; loadData({}); }
 
 async function api(path, { method = 'GET', body } = {}) {
   let r;
@@ -72,7 +75,7 @@ async function afterAuth(res) {
   const role = res.user.role;
   if (role === 'guardian') { loadData({}); state.tab = 'dash'; return; }
   if (role === 'teacher' || role === 'admin') { loadData({}); state.tab = 'roster'; if (typeof roster !== 'undefined') roster.loaded = false; return; }
-  const me = await api('/api/me');
+  const me = await api('/api/me'); state.myTeacher = me.teacher || null;
   if (me.data.profile) { dirty.clear(); loadData(me.data, true); } else { SYNC.forEach((k) => dirty.add(k)); schedulePush(); } // 서버에 데이터가 없으면 이 기기 데이터를 올림
   state.tab = 'home';
 }
@@ -81,7 +84,7 @@ async function poll() { // 다른 기기·강사가 바꾼 내용을 가져온�
   try {
     let data;
     if (state.viewAs) data = (await api(`/api/students/${state.viewAs.id}`)).data;
-    else if (state.user?.role === 'learner') data = (await api('/api/me')).data;
+    else if (state.user?.role === 'learner') { const me = await api('/api/me'); data = me.data; state.myTeacher = me.teacher || null; }
     else return;
     const before = JSON.stringify(SYNC.map((k) => state[k]));
     adopt(data);
@@ -92,7 +95,7 @@ async function poll() { // 다른 기기·강사가 바꾼 내용을 가져온�
 async function bootAuth() {
   if (state.token) {
     try {
-      const me = await api('/api/me'); state.user = me.user;
+      const me = await api('/api/me'); state.user = me.user; state.myTeacher = me.teacher || null;
       const role = me.user.role;
       if (role === 'learner') { if (me.data.profile) { dirty.clear(); loadData(me.data, true); } else { SYNC.forEach((k) => dirty.add(k)); schedulePush(); } }
       else { loadData({}); state.tab = role === 'guardian' ? 'dash' : 'roster'; }
@@ -125,15 +128,33 @@ function profileForAI() {
 }
 
 // ---- 화면 전환 ----
-const LEARNER_TABS = ['home', 'explore', 'tests', 'study', 'plan', 'report', 'quiz', 'coach', 'account'];
-const STUDENT_VIEW_TABS = ['home', 'tests', 'study', 'plan', 'report']; // 강사가 학생을 열었을 때
+const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'quiz', 'coach', 'account'];
+const STUDENT_VIEW_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
 const STAFF_TABS = ['roster', 'register', 'staff', 'account'];
 const roleOf = () => state.user?.role || 'learner';
+const ICONS = {
+  home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M10 20v-5h4v5"/>',
+  tests: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="m9.5 13.5 2 2 3.5-4"/>',
+  study: '<path d="M3 5.5c3-1 6-.6 9 1.5 3-2.1 6-2.5 9-1.5V19c-3-1-6-.6-9 1.5C9 18.4 6 18 3 19z"/><path d="M12 7v13"/>',
+  plan: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',
+  report: '<path d="M6.5 3.5h8l4 4V20a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1z"/><path d="M14 3.5V8h4.5M9 13h6M9 16.5h4"/>',
+  quiz: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.6 2.6 0 0 1 5 1c0 1.7-2.5 2-2.5 3.5M12 17h.01"/>',
+  coach: '<path d="M20.5 12a8 8 0 0 1-11.8 7L4 20.5l1.5-4.6A8 8 0 1 1 20.5 12z"/><path d="M9 11.5h6M9 14.5h3.5"/>',
+  messages: '<rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="m4 8 8 5.5L20 8"/>',
+  account: '<circle cx="12" cy="8.5" r="3.6"/><path d="M4.8 20c.9-3.6 3.7-5.4 7.2-5.4s6.3 1.8 7.2 5.4"/>',
+  dash: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
+  roster: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.7-3.2 3-4.9 5.5-4.9s4.8 1.7 5.5 4.9"/><path d="M16 5.5a3 3 0 0 1 0 6M17.5 14.9c1.9.5 3 2 3.5 4.6"/>',
+  register: '<circle cx="10" cy="8.5" r="3.4"/><path d="M3.5 19.5c.8-3.3 3.2-5 6.5-5s5.7 1.7 6.5 5M19 8v6M16 11h6"/>',
+  staff: '<path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6z"/><path d="m9.3 12 2 2 3.6-3.8"/>',
+};
+const icon = (k) => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICONS[k] || ''}</svg>`;
+const tabBadge = (k) => (typeof unreadCount === 'function' && k === 'messages' ? unreadCount() : 0);
 function tabOk(tab) { // 가입한 서비스(학습관리/진로컨설팅)에 따라 탭을 숨김
   const sv = state.profile?.services || {};
   if (['study', 'plan', 'quiz'].includes(tab)) return sv.study !== false;
-  if (['explore', 'tests'].includes(tab)) return sv.career !== false;
+  if (tab === 'tests') return sv.career !== false;
+  if (tab === 'messages') return !!state.viewAs || (!!state.user && !PREVIEW) || (PREVIEW && !!state.viewAs);
   return true;
 }
 function tabsNow() {
@@ -144,17 +165,17 @@ function tabsNow() {
   if (role === 'admin') return STAFF_TABS;
   return LEARNER_TABS.filter(tabOk);
 }
-const RENDERERS = () => ({ home: renderHome, explore: renderExplore, tests: renderTests, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
+const RENDERERS = () => ({ home: renderHome, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
-  document.documentElement.lang = lang; document.title = t('title'); $('#title').textContent = '🧭 ' + t('title');
+  document.documentElement.lang = lang; document.title = t('title'); $('#title').textContent = t('title');
   const role = roleOf(), staffLike = ['guardian', 'teacher', 'admin'].includes(role);
   document.body.classList.toggle('kid', !!state.profile && state.profile.group === 'elementary' && (!staffLike || !!state.viewAs));
   const onboarding = !state.user && !state.profile;
   const tabs = onboarding ? [] : tabsNow();
   if (!onboarding && !tabs.includes(state.tab)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
   $('#nav').hidden = onboarding;
-  $('#nav').innerHTML = tabs.map((k) => `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${t('tab_' + k)}</button>`).join('');
+  $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); scrollTo(0, 0); }));
   if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
   (RENDERERS()[state.tab] || renderHome)(app);
@@ -185,28 +206,32 @@ function renderOnboarding(app) {
 
 // ---- 홈 ----
 function renderHome(app) {
-  const g = state.profile.group;
-  const done = answered() === Q().length;
-  const open = state.tasks.filter((x) => !x.done).length;
-  const mins = state.log[today()] || 0;
+  const g = state.profile.group, kid = GROUPS[g].kid;
+  const open = state.tasks.filter((x) => !x.done).length, mins = state.log[today()] || 0;
   const n = ddayOf(state.goal.date), ci = state.checkins.find((c) => c.date === today());
   const wd = (new Date().getDay() + 6) % 7, todays = state.schedule.filter((b) => b.day === wd).sort((a, b) => a.start - b.start);
-  const cells = state.weekplan.length * 7, green = state.weekplan.reduce((a, r) => a + r.days.filter((x) => x === 'green').length, 0);
-  const sv = state.profile.services || {};
+  const cells = state.weekplan.length * 7, green = state.weekplan.reduce((x, r) => x + r.days.filter((v) => v === 'green').length, 0);
+  const sv = state.profile.services || {}, done = doneTestCount(), quickDone = answered() === Q().length;
+  const dateText = new Intl.DateTimeFormat(lang === 'vi' ? 'vi-VN' : 'ko-KR', { month: 'long', day: 'numeric', weekday: 'long' }).format(new Date());
+  const career = sv.career === false ? '' : kid
+    ? `<div class="card"><h2>${t('home_career')}</h2>${quickDone ? `<p>${t('home_types')} ${topTypes().map((ty) => `<span class="tag strong">${R()[ty].name}</span>`).join('')}</p>` : `<p class="sub">${t('home_not_tested', { a: answered(), b: Q().length })}</p>`}<button class="primary" data-go="tests">${quickDone ? t('btn_result') : t('btn_test')}</button></div>`
+    : `<div class="card"><h2>${t('home_career')}</h2><p class="sub">${t('home_comp_progress', { a: done, b: TEST_IDS.length })}</p><div class="bar"><i style="width:${done / TEST_IDS.length * 100}%"></i></div>
+        <div class="actions" style="margin-top:12px"><button class="primary" data-go="${done === TEST_IDS.length ? 'report' : 'tests'}">${done === TEST_IDS.length ? t('comp_view_report') : done ? t('comp_continue') : t('comp_start')}</button></div></div>`;
   app.innerHTML = `
-    <div class="card"><h2>${esc(t('home_welcome', { name: state.profile.name }))} ${GROUPS[g].kid ? '🌟' : ''}</h2>
-      <div class="stats"><div><b>${unit('unit_day', streak())}</b><span class="sub">${t('stat_streak')}</span></div><div><b>${unit('unit_min', mins)}</b><span class="sub">${t('stat_today')}</span></div><div><b>${unit('unit_count', open)}</b><span class="sub">${t('stat_open')}</span></div></div></div>
-    ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}
-    <div class="card"><h2>${t('ci_title')}</h2>${ci ? `<p>✅ ${t('ci_done', { time: esc(ci.time) })}</p>` : `<button class="primary" id="checkin">${t('ci_btn')}</button>`}<p class="sub">${t('rep_checkins', { n: checkinsThisWeek() })}</p></div>
-    ${sv.study !== false ? `<div class="card"><h2>${t('home_today_sched')}</h2>${todays.length ? todays.map((b) => `<div class="task"><span class="tag" style="background:${esc(b.color)};color:#fff">${hourLabel(b.start)}–${hourLabel(b.end)}</span><span>${esc(b.label)}</span></div>`).join('') : `<p class="sub">${t('home_no_sched')}</p>`}
-      ${cells ? `<p class="sub">${t('home_wp', { g: green, n: cells })}</p>` : ''}<button data-go="plan">${t('tab_plan')}</button></div>` : ''}
-    ${sv.career !== false ? `<div class="card"><h2>${t('explore_title')}</h2>${done
-      ? `<p>${t('home_types')} ${topTypes().map((ty) => `<span class="tag">${R()[ty].name}</span>`).join('')}</p>`
-      : `<p class="sub">${t('home_not_tested', { a: answered(), b: Q().length })}</p>`}
-      <button class="primary" data-go="explore">${done ? t('btn_result') : t('btn_test')}</button> <button data-go="tests">${t('tab_tests')}</button></div>` : ''}
-    ${state.quiz.length ? `<div class="card"><h2>${t('recent_quiz')}</h2>${state.quiz.slice(-3).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(subjLabel(q.subject))} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}
-    <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
-    <div class="card">${['study', 'report', 'quiz', 'coach'].filter((k) => !state.viewAs || ['study', 'report'].includes(k)).filter(tabOk).map((k) => `<button data-go="${k}">${t('tab_' + k)}</button>`).join(' ')} ${state.viewAs ? '' : `<button id="reset">${t('btn_reset')}</button>`}</div>`;
+    <div class="hero"><div><h1>${esc(t('home_welcome', { name: state.profile.name }))} ${kid ? '🌟' : ''}</h1><p class="sub">${esc(dateText)}</p></div><span class="chip">🔥 ${unit('unit_day', streak())}</span></div>
+    <div class="card"><div class="tiles"><div class="tile"><b>${unit('unit_min', mins)}</b><span class="sub">${t('stat_today')}</span></div><div class="tile"><b>${unit('unit_count', open)}</b><span class="sub">${t('stat_open')}</span></div><div class="tile"><b>${checkinsThisWeek()}</b><span class="sub">${t('rep_checkin_lbl')}</span></div></div></div>
+    <div class="grid2"><div>
+      ${sv.study !== false ? `<div class="card"><h2>${t('home_today_sched')}</h2>${todays.length ? todays.map((b) => `<div class="slot"><span class="tag" style="background:${esc(b.color)};color:#fff">${hourLabel(b.start)}–${hourLabel(b.end)}</span><span>${esc(b.label)}</span></div>`).join('') : `<p class="sub">${t('home_no_sched')}</p>`}
+        ${cells ? `<p class="sub">${t('home_wp', { g: green, n: cells })}</p>` : ''}<div class="actions"><button data-go="plan">${t('tab_plan')}</button>${ci ? '' : `<button class="primary" id="checkin">${t('ci_btn')}</button>`}</div>${ci ? `<p class="sub">✅ ${t('ci_done', { time: esc(ci.time) })}</p>` : ''}</div>` : `<div class="card"><h2>${t('ci_title')}</h2>${ci ? `<p>✅ ${t('ci_done', { time: esc(ci.time) })}</p>` : `<button class="primary" id="checkin">${t('ci_btn')}</button>`}</div>`}
+      ${career}
+      <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
+    </div><div>
+      ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}
+      <div class="card"><h2>${t('heat_title')}</h2>${heatmapHtml()}<p class="sub">${t('heat_hint')}</p></div>
+      <div class="card"><h2>${t('bd_title')}</h2>${badgesHtml()}</div>
+      ${state.quiz.length ? `<div class="card"><h2>${t('recent_quiz')}</h2>${state.quiz.slice(-3).reverse().map((q) => `<div class="sub">${esc(q.date)} · ${esc(subjLabel(q.subject))} · ${q.score}/${q.total}</div>`).join('')}</div>` : ''}
+    </div></div>
+    ${state.viewAs ? '' : `<p class="actions"><button id="reset" class="sub">${t('btn_reset')}</button></p>`}`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
   if ($('#checkin')) $('#checkin').onclick = () => { const d = new Date(); state.checkins.push({ date: today(), time: `${pad(d.getHours())}:${pad(d.getMinutes())}` }); save('checkins'); render(); };
   if ($('#reset')) $('#reset').onclick = () => {
@@ -214,8 +239,8 @@ function renderHome(app) {
   };
 }
 
-// ---- 진로탐색(간이 흥미검사) ----
-function renderExplore(app) {
+// ---- 초등학생용 쉬운 흥미검사 (검사 탭 안에서 사용) ----
+function renderQuick(app) {
   const kid = GROUPS[state.profile.group].kid;
   if (answered() < Q().length) {
     app.innerHTML = `<div class="card"><h2>${t('test_title')}</h2><p class="sub">${kid ? t('test_hint_kid') : t('test_hint')} (${answered()}/${Q().length})</p>
@@ -232,7 +257,7 @@ function renderExplore(app) {
     ${Object.keys(s).sort((a, b) => s[b] - s[a]).map((ty) => `<div class="row"><span style="width:120px">${R()[ty].name}</span><div class="bar" style="flex:1"><i style="width:${s[ty] / 10 * 100}%"></i></div><span>${s[ty]}/10</span></div>`).join('')}</div>
     ${top.map((ty) => `<div class="card"><h2>${R()[ty].name} (${ty})</h2><p>${R()[ty].desc}</p><p class="sub">${t('res_jobs')}</p>${C().careers[ty][kid ? 'kid' : 'std'].map((c) => `<span class="tag">${esc(c)}</span>`).join('')}</div>`).join('')}
     <div class="card"><h2>${t('res_next')}</h2><ul>${C().next[state.profile.group].map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
-    ${state.viewAs ? '' : `<button class="primary" data-go="coach">${t('btn_ask_coach')}</button> `}<button data-go="tests">${t('comp_go')}</button> <button id="redo">${t('btn_redo')}</button></div>
+    ${state.viewAs ? '' : `<button class="primary" data-go="coach">${t('btn_ask_coach')}</button> `}<button id="redo">${t('btn_redo')}</button></div>
     <p class="sub">${t('res_disclaimer')}</p>`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
   $('#redo').onclick = () => { state.answers = {}; save('answers'); render(); };

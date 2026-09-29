@@ -10,7 +10,7 @@ const draft = () => (state.viewAs ? null : store.get(DRAFT_KEY, null)); // 학�
 const saveDraft = () => { if (tv.comp && !state.viewAs) store.set(DRAFT_KEY, { ids: tv.ids, idx: tv.idx, ans: tv.ans, at: today() }); };
 
 function renderTests(app) {
-  if (GROUPS[state.profile.group].kid) { app.innerHTML = `<div class="card"><h2>${t('tests_title')}</h2><p>${t('tests_kid_note')}</p></div>`; return; }
+  if (GROUPS[state.profile.group].kid) return renderQuick(app); // 초등학생: 쉬운 흥미검사 (종합검사는 중학생부터)
   if (tv.mode === 'take') return renderTake(app);
   if (tv.mode === 'result' && state.deep[tv.resultId]?.length) return renderTestResult(app, tv.resultId);
   tv = freshTv();

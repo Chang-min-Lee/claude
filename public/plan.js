@@ -201,10 +201,11 @@ function gradesView(body) {
     ${ro ? '' : `<div class="card"><h2>${t('gr_add')}</h2>
       <div class="row"><input type="text" id="grs" maxlength="30" placeholder="${t('gr_subject')}"><input type="text" id="grv" maxlength="12" placeholder="${t('gr_score_ph')}" style="max-width:110px"></div>
       <div class="row"><input type="date" id="grd" value="${today()}" style="max-width:170px"><input type="text" id="grn" maxlength="60" placeholder="${t('gr_note')}"><button class="primary" id="gradd">${t('btn_add')}</button></div>
-      <p class="sub" id="grmsg"></p></div>
+      <p class="sub" id="grmsg"></p><button id="grdl" ${state.grades.length ? '' : 'disabled'}>${t('csv_btn')}</button></div>
       <div class="card"><h2>${t('gr_csv_title')}</h2><p class="sub">${t('gr_csv_help')}</p><textarea id="grcsv" rows="4" placeholder="${t('gr_csv_ph')}"></textarea><button id="grimport">${t('gr_csv_btn')}</button> <span class="sub" id="grcsvmsg"></span></div>`}`;
   if (ro) return;
   body.querySelectorAll('[data-gdel]').forEach((b) => (b.onclick = () => { state.grades.splice(+b.dataset.gdel, 1); save('grades'); render(); }));
+  $('#grdl').onclick = () => downloadCsv(`grades-${today()}.csv`, [[t('gr_date'), t('gr_subject'), t('gr_score'), t('gr_note')], ...state.grades.slice().sort((a, b) => a.date.localeCompare(b.date)).map((g) => [g.date, g.subject, g.score, g.note])]);
   $('#gradd').onclick = () => {
     const subject = $('#grs').value.trim(), score = $('#grv').value.trim();
     if (!subject || !score) { $('#grmsg').textContent = t('gr_need'); return; }

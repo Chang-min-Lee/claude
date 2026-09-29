@@ -48,12 +48,12 @@ function renderRoster(app) {
         ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
       <label class="row"><input type="checkbox" id="rw" ${roster.watch ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('roster_watch_only')} <span class="sub">(${watchN})</span></span></label>
       <div class="row"><input type="text" id="lcode" maxlength="8" placeholder="${t('code_ph')}" style="max-width:220px"><button id="lbtn">${t('btn_link')}</button><span class="sub" id="lmsg">${esc(roster.msg)}</span></div>
-      <div class="row"><button id="wsum">${t('ws_btn')}</button><button id="rreload">${t('btn_reload')}</button></div>
+      <div class="row"><button id="wsum">${t('ws_btn')}</button><button id="rcsv">${t('csv_btn')}</button><button id="rreload">${t('btn_reload')}</button></div>
       ${roster.summary ? `<textarea id="wstext" rows="4" readonly>${esc(roster.summary)}</textarea><p class="sub" id="wscopy"></p>` : ''}
       ${roster.err ? `<p class="sub">${esc(roster.err)}</p>` : ''}</div>
     ${roster.loading && !roster.learners.length ? `<p class="sub">${t('loading')}</p>` : list.length ? `<div class="card"><div class="tscroll"><table class="wplan roster"><thead><tr><th></th><th>${t('roster_name')}</th><th>${t('roster_goal')}</th><th>${t('stat_streak')}</th><th>${t('last7')}</th><th>${t('roster_tasks')}</th><th>${t('rep_checkin_lbl')}</th><th>${t('roster_status')}</th>${admin ? `<th>${t('teacher_lbl')}</th>` : ''}<th></th></tr></thead><tbody>
       ${list.map((l) => `<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${roster.sel.has(l.id) ? 'checked' : ''}></td>
-        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}</span>${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
+        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}</span>${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
         <td class="detail">${esc(l.goal.label)}${ddayCell(l)}</td><td>${unit('unit_day', l.streak)}</td><td>${unit('unit_min', sum(l.week))}</td><td>${l.doneCount}/${l.doneCount + l.openCount}</td><td>${l.checkinsWeek}</td>
         <td><span class="pill ${l.status}">${t('st_' + l.status)}</span></td>${admin ? `<td>${l.teacher ? esc(l.teacher.name) : `<span class="sub">${t('unassigned')}</span>`}</td>` : ''}
         <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}`;
@@ -61,6 +61,8 @@ function renderRoster(app) {
   if ($('#rt')) $('#rt').onchange = (e) => { roster.teacher = e.target.value; render(); };
   $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
   $('#rreload').onclick = () => { roster.loaded = false; render(); };
+  $('#rcsv').onclick = () => downloadCsv(`students-${today()}.csv`, [[t('csv_name'), t('csv_group'), t('csv_teacher'), t('csv_goal'), t('csv_dday'), t('csv_streak'), t('csv_week'), t('csv_done'), t('csv_total'), t('csv_checkin'), t('csv_status'), t('csv_reasons')],
+    ...list.map((l) => [l.name, l.group ? groupLabel(l.group) : '', l.teacher?.name || '', l.goal.label, l.goal.dday ?? '', l.streak, sum(l.week), l.doneCount, l.doneCount + l.openCount, l.checkinsWeek, t('st_' + l.status), flagReasons(l).join(' / ')])]);
   $('#lbtn').onclick = async () => { try { const r = await api('/api/link', { method: 'POST', body: { code: $('#lcode').value } }); roster.msg = t('linked_ok', { name: r.name }); roster.loaded = false; } catch (e) { roster.msg = e.message; } render(); };
   $('#wsum').onclick = async () => {
     const pick = roster.sel.size ? list.filter((l) => roster.sel.has(l.id)) : list;
