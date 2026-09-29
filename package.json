@@ -1,0 +1,7 @@
+{
+  "name": "jinro-ai",
+  "version": "0.1.0",
+  "description": "전 연령 진로탐색·학습관리 AI 코치",
+  "scripts": { "start": "node server.js" },
+  "engines": { "node": ">=18" }
+}
