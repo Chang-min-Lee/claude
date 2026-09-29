@@ -129,11 +129,12 @@ function profileForAI() {
 
 // ---- 화면 전환 ----
 const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'quiz', 'coach', 'account'];
-const STUDENT_VIEW_TABS = ['home', 'tests', 'study', 'plan', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
+const STUDENT_VIEW_TABS = ['home', 'input', 'tests', 'study', 'plan', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
 const STAFF_TABS = ['roster', 'register', 'staff', 'account'];
 const roleOf = () => state.user?.role || 'learner';
 const ICONS = {
+  input: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13.5 8.5l3 3"/>',
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M10 20v-5h4v5"/>',
   tests: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="m9.5 13.5 2 2 3.5-4"/>',
   study: '<path d="M3 5.5c3-1 6-.6 9 1.5 3-2.1 6-2.5 9-1.5V19c-3-1-6-.6-9 1.5C9 18.4 6 18 3 19z"/><path d="M12 7v13"/>',
@@ -165,7 +166,7 @@ function tabsNow() {
   if (role === 'admin') return STAFF_TABS;
   return LEARNER_TABS.filter(tabOk);
 }
-const RENDERERS = () => ({ home: renderHome, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
+const RENDERERS = () => ({ home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
   document.documentElement.lang = lang; document.title = t('title'); $('#title').textContent = t('title');

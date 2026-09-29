@@ -106,9 +106,10 @@ function demoApi(path, { method = 'GET', body } = {}) {
   if (p === '/api/students' && method === 'POST') {
     const id = 'n' + Math.random().toString(36).slice(2, 8), code = Math.random().toString(16).slice(2, 10).toUpperCase();
     const tid = demoRole() === 'teacher' ? state.user.id : body.teacherId || null;
-    demo.students[id] = { id, name: body.name, email: null, role: 'learner', shareCode: code, teacherId: tid, data: { profile: { name: body.name, group: body.group || 'high', services: body.services || { study: true, career: true }, school: body.school || '', note: body.note || '', teacherNote: '' }, goal: { type: body.goalType || 'general', label: body.goalLabel || '', date: body.goalDate || '', note: '', milestones: [] }, consent: { wellbeing: true } } };
+    demo.students[id] = { id, name: body.name, email: null, role: 'learner', shareCode: code, teacherId: tid, data: { profile: { name: body.name, group: body.group || 'high', services: body.services || { study: true, career: true }, school: body.school || '', note: body.note || '', teacherNote: '', orgType: body.orgType || '' }, goal: { type: body.goalType || 'general', label: body.goalLabel || '', date: body.goalDate || '', note: '', milestones: [] }, consent: { wellbeing: true } } };
     return { id, shareCode: code };
   }
+  if ((m = p.match(/^\/api\/students\/([\w-]+)$/)) && method === 'DELETE') { delete demo.students[m[1]]; return { ok: true }; }
   if (p === '/api/link' && method === 'POST') { const s = Object.values(demo.students).find((x) => x.shareCode === String(body.code).toUpperCase()); if (!s) demoErr(t('req_failed')); if (demoRole() === 'teacher') s.teacherId = state.user.id; else (demo.guardianLinks = demo.guardianLinks || ['mai']).push(s.id); return { ok: true, name: s.name }; }
   if (p === '/api/unlink') { if (demoRole() === 'guardian') demo.guardianLinks = (demo.guardianLinks || ['mai']).filter((x) => x !== body.id); else if (demo.students[body.id]) demo.students[body.id].teacherId = null; return { ok: true }; }
   if ((m = p.match(/^\/api\/students\/([\w-]+)\/meta$/)) && method === 'PUT') { demo.students[m[1]].teacherId = body.teacherId || null; return { ok: true }; }

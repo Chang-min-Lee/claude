@@ -438,7 +438,7 @@ const routes = {
     const b = await readBody(req);
     const name = clipStr(b.name, 20);
     if (!name) throw new HttpError(400, 'nameReq');
-    const profile = sanitizers.profile({ name, group: b.group, services: b.services, school: b.school, note: b.note });
+    const profile = sanitizers.profile({ name, group: b.group, services: b.services, school: b.school, note: b.note, orgType: b.orgType });
     const goal = sanitizers.goal({ type: b.goalType, label: b.goalLabel, date: b.goalDate });
     const l = newUser({ email: null, name, role: 'learner', managedBy: u.id, data: { profile, goal, consent: { wellbeing: true } } });
     db.users[l.id] = l;

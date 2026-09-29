@@ -197,14 +197,16 @@ function diagView(body) {
   const b = $('#dgai');
   if (b) b.onclick = async () => {
     b.disabled = true; $('#dgmsg').textContent = t('dg_making');
-    try {
-      const body2 = { group: state.profile.group, name: state.profile.name, today: today(), goal: { label: state.goal.label, dday: ddayOf(state.goal.date) },
-        tests: tests.map((id) => ({ name: tx(id).name, headline: describeTest(id, lastRes(id)).headline, cats: testById(id).cats.map((k) => ({ label: testLabel(id, k), value: lastRes(id).cat[k] })) })),
-        grades: state.grades.slice(-12).map((g) => ({ subject: g.subject, score: g.score })), schedule: { hours: scheduleStats().total }, tasksDone: taskStats().done, tasksTotal: taskStats().total };
-      const r = await api('/api/diagnosis', { method: 'POST', body: body2 });
-      state.diag = r.diag; save('diag'); render();
-    } catch (e) { $('#dgmsg').textContent = e.message; b.disabled = false; }
+    try { await aiDiagnosis(); render(); } catch (e) { $('#dgmsg').textContent = e.message; b.disabled = false; }
   };
+}
+async function aiDiagnosis() { // 검사 결과·성적·시간표를 서버 AI 에 보내 진단서 문장을 받아 저장
+  const tests = PRINT_TESTS.filter((id) => lastRes(id));
+  const body = { group: state.profile.group, orgType: state.profile.orgType || '', name: state.profile.name, today: today(), goal: { label: state.goal.label, dday: ddayOf(state.goal.date) },
+    tests: tests.map((id) => ({ name: tx(id).name, headline: describeTest(id, lastRes(id)).headline, cats: testById(id).cats.map((k) => ({ label: testLabel(id, k), value: lastRes(id).cat[k] })) })),
+    grades: state.grades.slice(-12).map((g) => ({ subject: g.subject, score: g.score })), schedule: { hours: scheduleStats().total }, tasksDone: taskStats().done, tasksTotal: taskStats().total };
+  const res = await api('/api/diagnosis', { method: 'POST', body });
+  state.diag = res.diag; save('diag');
 }
 
 // ----- 강사용 -----

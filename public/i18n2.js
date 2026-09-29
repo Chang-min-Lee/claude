@@ -150,3 +150,31 @@ CONTENT.vi.tips = {
   sdl: { plan: 'Trong kế hoạch tuần, mỗi ngày chỉ ghi 2–3 việc chính và đánh dấu thứ tự ưu tiên.', monitor: 'Sau khi học, dành 5 phút ghi "hôm nay hiểu gì/chưa hiểu gì" để tự kiểm tra.', goal: 'Chia mục tiêu lớn thành mục tiêu nhỏ theo tuần và ghi vào cột mốc.', persist: 'Những ngày thiếu động lực, đặt quy tắc chỉ học 15 phút rồi tự đánh dấu hoàn thành.' },
   sdlBand: ['Khả năng tự lập kế hoạch và thực hiện rất mạnh. Hãy tự đặt những mục tiêu thử thách hơn.', 'Thói quen học ổn định. Hãy duy trì kế hoạch và thói quen tự kiểm tra.', 'Ở mức trung bình. Quản lý bằng kế hoạch tuần và danh sách việc cần làm sẽ giúp tốt hơn.', 'Bạn còn khó tự lập kế hoạch. Hãy bắt đầu từ mục tiêu ngắn và thường xuyên kiểm tra cùng giáo viên/phụ huynh.'],
 };
+
+// 학생 입력(올인원)·일괄 등록 문구
+Object.assign(UI.ko, {
+  tab_input: '학생 입력', in_title: '학생 정보 입력', in_help: '한 화면에서 기본 정보, 목표, 검사 결과, 성적, 시간표, 주간계획, 할 일, 진단서까지 모두 입력·수정할 수 있어요.',
+  in_s_basic: '기본 정보', in_s_goal: '목표·D-day', in_s_tests: '검사 결과 직접 입력', in_s_grades: '성적', in_s_sched: '시간표', in_s_wp: '주간 학습계획', in_s_tasks: '할 일', in_s_diag: '진단서',
+  ot_none: '운영 모델 (선택 안 함)', ot_language: '어학원', ot_studyroom: '공부방', ot_consultant: '학습 컨설턴트',
+  in_teacher: '담당 강사', in_code: '활성화 코드', in_has_account: '이 학생은 직접 가입한 계정이에요.', in_delete: '학생 삭제', in_delete_confirm: '정말 삭제할까요? 되돌릴 수 없어요.',
+  mt_help: '종이 검사나 외부 검사 결과를 영역별 1~5점으로 입력하면 리포트에 반영돼요.', mt_none: '결과 없음', mt_save: '결과 저장', mt_del_last: '마지막 결과 삭제', mt_need: '모든 영역에 1~5점을 입력해 주세요.',
+  dgi_help: '진단서를 직접 작성하거나, AI로 초안을 만든 뒤 고칠 수 있어요.', dgi_ai: 'AI로 초안 채우기', dgi_before: '이전 상황', dgi_insight: '핵심 통찰', dgi_int_label: '학습 강도', dgi_int_reason: '강도 이유',
+  dgi_subjects: '과목별 분석', dgi_subjects_ph: '한 줄에 하나: 과목: 내용', dgi_methods: '학습 방법', dgi_methods_ph: '한 줄에 하나: 항목: 내용', dgi_checklist: '체크리스트', dgi_checklist_ph: '한 줄에 하나', dgi_view: '진단서 보기',
+  sch_ai_existing_ph: '이미 있는 일정(학교·학원 등)을 적어 주세요. AI가 그 시간을 피해 짜 줘요.',
+  bulk_title: '일괄 등록 (CSV·엑셀 붙여넣기)', bulk_help: '한 줄에 한 명. 열: 이름, 학년구분(elementary/middle/high/college/adult), 학교, 목표, 목표일(YYYY-MM-DD)',
+  bulk_example: '예시', bulk_preview: '미리보기', bulk_go: '일괄 등록하기', bulk_done: '{n}명 등록 완료', bulk_codes: '활성화 코드 CSV 받기',
+  reg_continue: '이어서 입력하기', reg_to_list: '목록으로', reg_org: '운영 모델',
+});
+Object.assign(UI.vi, {
+  tab_input: 'Nhập thông tin', in_title: 'Nhập thông tin học viên', in_help: 'Nhập và chỉnh sửa trên một màn hình: thông tin cơ bản, mục tiêu, kết quả kiểm tra, điểm số, thời khóa biểu, kế hoạch tuần, việc cần làm, bản chẩn đoán.',
+  in_s_basic: 'Thông tin cơ bản', in_s_goal: 'Mục tiêu · D-day', in_s_tests: 'Nhập kết quả kiểm tra', in_s_grades: 'Điểm số', in_s_sched: 'Thời khóa biểu', in_s_wp: 'Kế hoạch học tuần', in_s_tasks: 'Việc cần làm', in_s_diag: 'Bản chẩn đoán',
+  ot_none: 'Mô hình vận hành (không chọn)', ot_language: 'Trung tâm ngoại ngữ', ot_studyroom: 'Lớp học kèm tại nhà', ot_consultant: 'Cố vấn học tập',
+  in_teacher: 'Giáo viên phụ trách', in_code: 'Mã kích hoạt', in_has_account: 'Học viên này tự đăng ký tài khoản.', in_delete: 'Xóa học viên', in_delete_confirm: 'Bạn chắc chắn muốn xóa? Không thể hoàn tác.',
+  mt_help: 'Nhập kết quả bài kiểm tra giấy hoặc bên ngoài theo từng lĩnh vực (1–5 điểm) để phản ánh vào báo cáo.', mt_none: 'Chưa có kết quả', mt_save: 'Lưu kết quả', mt_del_last: 'Xóa kết quả gần nhất', mt_need: 'Hãy nhập 1–5 điểm cho tất cả lĩnh vực.',
+  dgi_help: 'Bạn có thể tự viết bản chẩn đoán hoặc tạo bản nháp bằng AI rồi chỉnh sửa.', dgi_ai: 'Điền bản nháp bằng AI', dgi_before: 'Tình hình trước đây', dgi_insight: 'Nhận định chính', dgi_int_label: 'Cường độ học', dgi_int_reason: 'Lý do cường độ',
+  dgi_subjects: 'Phân tích theo môn', dgi_subjects_ph: 'Mỗi dòng một mục: môn: nội dung', dgi_methods: 'Phương pháp học', dgi_methods_ph: 'Mỗi dòng một mục: tiêu đề: nội dung', dgi_checklist: 'Danh sách kiểm tra', dgi_checklist_ph: 'Mỗi dòng một mục', dgi_view: 'Xem bản chẩn đoán',
+  sch_ai_existing_ph: 'Ghi các lịch đã có (trường, lớp học thêm...). AI sẽ xếp lịch tránh các giờ đó.',
+  bulk_title: 'Đăng ký hàng loạt (dán CSV/Excel)', bulk_help: 'Mỗi dòng một học viên. Cột: tên, nhóm (elementary/middle/high/college/adult), trường, mục tiêu, ngày mục tiêu (YYYY-MM-DD)',
+  bulk_example: 'Ví dụ', bulk_preview: 'Xem trước', bulk_go: 'Đăng ký hàng loạt', bulk_done: 'Đã đăng ký {n} học viên', bulk_codes: 'Tải CSV mã kích hoạt',
+  reg_continue: 'Tiếp tục nhập thông tin', reg_to_list: 'Về danh sách', reg_org: 'Mô hình vận hành',
+});

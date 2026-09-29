@@ -64,6 +64,7 @@ function schedView(body) {
       <p>${t('sch_total', { n: total })}</p><p>${Object.entries(by).map(([l, h]) => `<span class="tag">${esc(l)} ${h}h</span>`).join('') || `<span class="sub">${t('sch_empty')}</span>`}</p></div>
     ${ro ? '' : `<div class="card"><h2>${t('sch_ai_title')}</h2><p class="sub">${t('sch_ai_desc')}</p>
       <input type="text" id="aisubj" maxlength="80" placeholder="${t('sch_ai_subj_ph')}">
+      <textarea id="aiexisting" rows="2" maxlength="300" placeholder="${t('sch_ai_existing_ph')}" style="margin-top:8px"></textarea>
       <div class="row"><input type="number" id="aihours" min="1" max="30" value="8" style="max-width:90px"><span class="sub">${t('per_week')}</span><button class="primary" id="aigen">${t('sch_ai_btn')}</button></div>
       <p class="sub" id="aimsg">${state.notice ? esc(state.notice) : ''}</p></div>`}`;
   state.notice = null;
@@ -111,7 +112,7 @@ function schedView(body) {
     const subjects = $('#aisubj').value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 6), hours = Math.min(30, Math.max(1, +$('#aihours').value || 8));
     $('#aigen').disabled = true; $('#aimsg').textContent = t('sch_ai_making');
     try {
-      const r = PREVIEW ? localSchedule({ subjects, hours }) : await api('/api/schedule', { method: 'POST', body: { group: state.profile.group, goal: state.goal.label, hours, subjects } });
+      const r = PREVIEW ? localSchedule({ subjects, hours }) : await api('/api/schedule', { method: 'POST', body: { group: state.profile.group, goal: state.goal.label, hours, subjects, existing: $('#aiexisting').value } });
       state.schedule = r.schedule; save('schedule');
       if (r.weekplan?.length) { state.weekplan = r.weekplan.map((w) => ({ ...w, days: ['', '', '', '', '', '', ''] })); save('weekplan'); }
       state.notice = t('sch_ai_done', { n: r.schedule.length }) + (r.ai ? '' : t('sch_ai_template'));

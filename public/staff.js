@@ -1,7 +1,7 @@
 // 강사·관리자 콘솔(학생 목록·등록·강사 관리)과 보호자 대시보드, 학생 열어보기
 const newProfile = (name) => ({ name, group: 'adult', services: { study: true, career: true }, school: '', note: '', teacherNote: '' });
 
-async function openStudent(id) {
+async function openStudent(id, tab) {
   await flush(); dirty.clear();
   try {
     const r = await api('/api/students/' + id);
@@ -10,7 +10,7 @@ async function openStudent(id) {
     state.ro = !r.canWrite;
     if (!state.profile) state.profile = newProfile(r.user.name);
     state.profile.services = state.profile.services || { study: true, career: true };
-    state.tab = state.ro ? 'report' : 'home'; state.sub = { plan: 'schedule', report: state.ro ? 'parent' : 'comp' }; tv = freshTv();
+    state.tab = state.ro ? 'report' : (tab || 'home'); state.sub = { plan: 'schedule', report: state.ro ? 'parent' : 'comp' }; tv = freshTv();
     render(); scrollTo(0, 0);
   } catch (e) { state.notice = e.message; render(); }
 }
@@ -86,20 +86,37 @@ function renderRegister(app) {
       <div class="row"><span class="sub">${t('goal_date')}</span><input type="date" id="rgdate" style="max-width:170px"></div>
       <label class="row"><input type="checkbox" id="rs1" checked style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
       <label class="row"><input type="checkbox" id="rs2" checked style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
+      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'studyroom', 'consultant'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
       ${admin ? `<div class="row"><select id="rteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></div>` : ''}
       <textarea id="rnote" rows="2" maxlength="200" placeholder="${t('reg_note')}"></textarea>
       <p class="sub">${t('reg_consent_note')}</p>
       <button class="primary" id="rsubmit">${t('reg_btn')}</button> <span class="sub" id="rmsg">${esc(reg.msg)}</span></div>
-    ${reg.result ? `<div class="card callout"><h2>✅ ${t('reg_done', { name: esc(reg.result.name) })}</h2><p>${t('reg_code')}: <b style="font-size:1.3em;letter-spacing:2px">${esc(reg.result.shareCode)}</b></p><p class="sub">${t('reg_code_help')}</p><button class="primary" id="ropen">${t('btn_open')}</button></div>` : ''}`;
+    ${reg.result ? `<div class="card callout"><h2>✅ ${t('reg_done', { name: esc(reg.result.name) })}</h2><p>${t('reg_code')}: <b style="font-size:1.3em;letter-spacing:2px">${esc(reg.result.shareCode)}</b></p><p class="sub">${t('reg_code_help')}</p><button class="primary" id="ropen">${t('reg_continue')}</button> <button id="rlist">${t('reg_to_list')}</button></div>` : ''}
+    <div class="card"><h2>${t('bulk_title')}</h2><p class="sub">${t('bulk_help')}</p>
+      <textarea id="bulk" rows="5" placeholder="${t('bulk_example')}: Nguyen Mai,high,Lê Quý Đôn,SAT 1400,2027-03-01">${esc(reg.bulk || '')}</textarea>
+      <button id="bprev">${t('bulk_preview')}</button> <button class="primary" id="bgo">${t('bulk_go')}</button> <span class="sub" id="bmsg">${esc(reg.bmsg || '')}</span>
+      ${reg.codes ? `<p><b>${t('bulk_done', { n: reg.codes.length })}</b> <button id="bcsv">${t('bulk_codes')}</button></p>` : ''}</div>`;
   $('#rsubmit').onclick = async () => {
     const name = $('#rname').value.trim(); if (!name) { $('#rmsg').textContent = t('reg_need_name'); return; }
     $('#rsubmit').disabled = true;
     try {
-      const r = await api('/api/students', { method: 'POST', body: { name, group: $('#rgroup').value, school: $('#rschool').value, note: $('#rnote').value, goalType: $('#rgtype').value, goalLabel: $('#rglabel').value, goalDate: $('#rgdate').value, services: { study: $('#rs1').checked, career: $('#rs2').checked }, teacherId: $('#rteacher')?.value || '' } });
+      const r = await api('/api/students', { method: 'POST', body: { name, group: $('#rgroup').value, school: $('#rschool').value, note: $('#rnote').value, goalType: $('#rgtype').value, goalLabel: $('#rglabel').value, goalDate: $('#rgdate').value, orgType: $('#rorg').value, services: { study: $('#rs1').checked, career: $('#rs2').checked }, teacherId: $('#rteacher')?.value || '' } });
       reg = { result: { id: r.id, name, shareCode: r.shareCode }, msg: '' }; roster.loaded = false; render();
     } catch (e) { $('#rmsg').textContent = e.message; $('#rsubmit').disabled = false; }
   };
-  if ($('#ropen')) $('#ropen').onclick = () => openStudent(reg.result.id);
+  if ($('#ropen')) $('#ropen').onclick = () => openStudent(reg.result.id, 'input');
+  if ($('#rlist')) $('#rlist').onclick = () => { reg.result = null; state.tab = 'roster'; render(); };
+  const parseBulk = () => $('#bulk').value.split(/\r?\n/).map((l) => l.split(/[,\t]/).map((x) => x.trim())).filter((c) => c[0]).map((c) => ({ name: c[0].slice(0, 20), group: Object.keys(GROUPS).includes(c[1]) ? c[1] : 'high', school: c[2] || '', goalLabel: c[3] || '', goalDate: /^\d{4}-\d{2}-\d{2}$/.test(c[4] || '') ? c[4] : '' })).slice(0, 200);
+  $('#bprev').onclick = () => { reg.bulk = $('#bulk').value; $('#bmsg').textContent = parseBulk().map((r) => `${r.name}(${groupLabel(r.group)})`).join(', '); };
+  $('#bgo').onclick = async () => {
+    const rows = parseBulk(); if (!rows.length) return;
+    $('#bgo').disabled = true; const codes = []; let err = '';
+    for (const r of rows) {
+      try { const x = await api('/api/students', { method: 'POST', body: { ...r, goalType: r.goalLabel ? 'career' : 'general', services: { study: true, career: true }, teacherId: $('#rteacher')?.value || '' } }); codes.push([r.name, x.shareCode]); } catch (e) { err = e.message; break; }
+    }
+    reg.codes = codes; reg.bulk = ''; reg.bmsg = err; roster.loaded = false; render();
+  };
+  if ($('#bcsv')) $('#bcsv').onclick = () => downloadCsv('codes.csv', [['name', 'code'], ...reg.codes]);
 }
 
 // ---------- 강사 관리 (관리자) ----------
