@@ -1,4 +1,7 @@
 // 모든 스크립트가 로드된 뒤 시작
+const brandEl = document.querySelector('.brand');
+brandEl.setAttribute('role', 'link'); brandEl.tabIndex = 0; brandEl.title = 'Home'; brandEl.onclick = goHome;
+brandEl.onkeydown = (e) => { if (e.key === 'Enter') goHome(); };
 const langSel = $('#lang');
 langSel.innerHTML = Object.entries(LANGS).map(([k, n]) => `<option value="${k}">${n}</option>`).join('');
 langSel.value = lang;

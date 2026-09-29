@@ -207,3 +207,19 @@ a { color:var(--main-strong); } a:hover { color:var(--main); }
 .landing h1 { font-size:1.7rem; margin:.1em 0 .2em; letter-spacing:-.02em; } .landing .lead { font-size:1.05rem; color:var(--sub); margin:.2em 0 .8em; }
 .landlist { list-style:none; padding:0; margin:.6em 0 1em; } .landlist li { padding:4px 0; }
 .grid2 + .card { margin-top:var(--gap); }
+
+.brand { cursor:pointer; }
+.landing { max-width:640px; margin:6vh auto 0; text-align:center; }
+.landing h1 { font-size:1.9rem; margin:0 0 .3em; letter-spacing:-.02em; } .landing .lead { color:var(--sub); font-size:1.02rem; margin:0 0 1.6em; }
+.entrygrid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; text-align:left; }
+.entrytile { display:flex; gap:12px; align-items:flex-start; padding:16px; border-radius:var(--r); background:var(--surface); border:1px solid var(--line); box-shadow:var(--shadow); font-weight:400; transition:border-color .15s, transform .1s; }
+.entrytile:hover { border-color:var(--gold); background:var(--surface); transform:translateY(-1px); }
+.entrytile b { display:block; font-size:1.02rem; color:var(--ink); margin-bottom:2px; } .entrytile small { display:block; color:var(--sub); font-size:.84rem; line-height:1.45; }
+.entrytile .ei { flex:none; width:40px; height:40px; border-radius:12px; background:var(--main2); color:var(--main-strong); display:flex; align-items:center; justify-content:center; }
+.entrytile .ei svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.landlinks { margin-top:1.4em; } .linkbtn { border:0; background:none; padding:2px 4px; color:var(--main-strong); font-weight:600; text-decoration:underline; text-underline-offset:3px; border-radius:6px; }
+.linkbtn:hover { background:none; color:var(--main); }
+@media (max-width:560px) { .entrygrid { grid-template-columns:1fr; } .landing { margin-top:2vh; } .landing h1 { font-size:1.5rem; } }
+
+.entrytile { text-align:left; } .entrytile > span:last-child { display:block; text-align:left; min-width:0; }
+#title { word-break:keep-all; line-height:1.25; font-size:.98rem; }

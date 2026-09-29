@@ -1,6 +1,6 @@
 {
-  "name": "진로AI 코치",
-  "short_name": "진로AI",
+  "name": "스마트에듀 학습관리시스템",
+  "short_name": "스마트에듀",
   "description": "진로탐색·종합검사·학습관리 (한국어/Tiếng Việt)",
   "start_url": "/",
   "scope": "/",

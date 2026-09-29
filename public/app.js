@@ -209,18 +209,20 @@ function renderLanding(app) {
     if (PREVIEW && mode === 'login') { state.trial = entry === 'learner'; return demoSwitch(entry); } // 미리보기: 로그인 버튼이 곧바로 샘플 화면으로 들어간다
     state.authMode = mode; state.tab = 'account'; render();
   };
-  const card = (entry, btns) => `<div class="card entry"><h2>${t('ent_' + entry)}</h2><p class="sub">${t('ent_' + entry + '_d')}</p><div class="actions">${btns}</div></div>`;
-  app.innerHTML = `<div class="card landing"><h1>${esc(orgName())}</h1><p class="lead">${t('land_tagline')}</p>
-      <ul class="landlist"><li>🧭 ${t('land_b1')}</li><li>📚 ${t('land_b2')}</li><li>👨‍👩‍👧 ${t('land_b3')}</li></ul></div>
-    <div class="grid2">
-      ${card('learner', `<button class="primary" data-en="learner:login">${t('login_as_learner')}</button><button data-en="learner:signup">${t('auth_tab_signup')}</button>`)}
-      ${card('guardian', `<button class="primary" data-en="guardian:login">${t('login_as_guardian')}</button><button data-en="guardian:signup">${t('auth_tab_signup')}</button>`)}
-      ${card('teacher', `<button class="primary" data-en="teacher:login">${t('login_as_teacher')}</button>`)}
-      ${card('admin', `<button class="primary" data-en="admin:login">${t('login_as_admin')}</button>`)}</div>
-    <div class="card"><p class="sub">${t('land_claim_q')} <button data-en="learner:claim">${t('auth_tab_claim')}</button></p>
-      <p class="sub">${t('land_trial_d')} <button id="ltrial">${t('land_trial')}</button></p></div>`;
+  const IC = { learner: 'study', guardian: 'dash', teacher: 'roster', admin: 'staff' };
+  app.innerHTML = `<div class="landing"><h1>${esc(orgName())}</h1><p class="lead">${t('land_tagline')}</p>
+      <div class="entrygrid">${['learner', 'guardian', 'teacher', 'admin'].map((k) => `<button class="entrytile" data-en="${k}:login"><span class="ei">${icon(IC[k])}</span><span><b>${t('login_as_' + k)}</b><small>${t('ent_' + k + '_d')}</small></span></button>`).join('')}</div>
+      <p class="sub landlinks"><button class="linkbtn" data-en="learner:signup">${t('auth_tab_signup')}</button> · <button class="linkbtn" data-en="learner:claim">${t('land_claim_q')} ${t('auth_tab_claim')}</button> · <button class="linkbtn" id="ltrial">${t('land_trial')}</button></p></div>`;
   app.querySelectorAll('[data-en]').forEach((b) => { const [e, m] = b.dataset.en.split(':'); b.onclick = enter(e, m); });
   $('#ltrial').onclick = () => { state.trial = true; render(); };
+}
+// 제목(로고)을 누르면 홈으로: 로그아웃 상태는 시작 화면, 로그인 상태는 각자의 첫 화면
+function goHome() {
+  if (state.viewAs) { closeStudent(); return; }
+  state.authMode = 'login';
+  if (!state.user && !state.profile) { state.trial = false; state.tab = 'home'; }
+  else state.tab = tabsNow()[0] || 'home';
+  render(); scrollTo(0, 0);
 }
 function renderOnboarding(app) {
   app.innerHTML = `${PREVIEW ? '' : `<button id="backland">${t('btn_back')}</button>`}<div class="card"><h2>${t('onb_hello')}</h2>
