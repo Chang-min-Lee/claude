@@ -116,3 +116,17 @@ test('데이터 현황(analytics)과 연구 동의 내보내기', async () => {
   assert.equal(ex.rows.length, a.research); assert.ok(ex.rows.every((r) => !('name' in r) && r.id.length === 10 && !('wellbeing' in r)));
   assert.equal((await get('/api/analytics/export', S.t1)).status, 403);
 });
+
+test('스터디카페 입·퇴실: 강사 기록, 이용 시간이 학습 기록에 반영, 중복·권한 방어', async () => {
+  const day = new Date().toISOString().slice(0, 10);
+  await put(`/api/students/${S.kid}/data`, { data: { profile: { name: '응웬 마이', group: 'high', orgType: 'studycafe', seat: 'A-12', passType: '월 정기권', passEnd: '2099-12-31' } } }, S.t1);
+  assert.equal((await post('/api/visits', { date: day, time: '09:00', marks: { [S.kid]: 'in' } })).status, 401);
+  assert.equal((await post('/api/visits', { date: day, time: '9:00', marks: {} }, S.t1)).status, 400);
+  let r = await post('/api/visits', { date: day, time: '09:00', marks: { [S.kid]: 'in', [S.kid2]: 'in' } }, S.t1); assert.equal(r.saved, 1); assert.equal(r.skipped, 1); // 남의 학생은 건너뜀
+  r = await post('/api/visits', { date: day, time: '09:30', marks: { [S.kid]: 'in' } }, S.t1); assert.equal(r.saved, 0); // 이미 입실 중
+  let l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, true); assert.equal(l.seat, 'A-12'); assert.equal(l.passEnd, '2099-12-31');
+  r = await post('/api/visits', { date: day, time: '11:30', marks: { [S.kid]: 'out' } }, S.t1); assert.equal(r.saved, 1);
+  r = await post('/api/visits', { date: day, time: '12:00', marks: { [S.kid]: 'out' } }, S.t1); assert.equal(r.saved, 0); // 입실 중이 아님
+  l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, false); assert.equal(l.todayMin, 150);
+  const d = (await get(`/api/students/${S.kid}`, S.t1)).data; assert.equal(d.visits.length, 1); assert.equal(d.visits[0].out, '11:30'); assert.equal(d.log[day], 150);
+});

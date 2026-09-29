@@ -48,6 +48,8 @@ function demoInit() {
   Object.assign(students.mai.data.profile, { className: L('고2 TOPIK반', 'Lớp TOPIK 11'), parentName: L('어머니', 'Mẹ'), status: 'active', nextSession: dAhead(3) });
   students.mai.data.attendance = attP(['p', 'p', 'l', 'p', 'p', '', '', 'p', 'p', 'a', 'p', 'p', '', '', 'p']);
   students.mai.data.intake = { concern: L('한국 대학 진학 준비가 막막함', 'Băn khoăn về việc chuẩn bị vào đại học Hàn Quốc'), goal: 'TOPIK 4', strengths: L('꾸준함, 어휘 암기', 'Kiên trì, học từ vựng tốt'), interests: '', habits: '', background: '' };
+  Object.assign(students.nam.data.profile, { orgType: 'studycafe', seat: 'B-07', passType: L('월 정기권', 'Gói tháng'), passEnd: dAhead(5) });
+  students.nam.data.visits = [{ date: dk(), in: '15:10', out: '' }];
   Object.assign(students.nam.data.profile, { className: L('중3 수학반', 'Lớp Toán 9'), status: 'active' });
   students.nam.data.attendance = attP(['p', 'a', 'a', 'p', 'l', '', '', 'p', 'a', 'p']);
   Object.assign(students.huong.data.profile, { className: '', status: 'active' });
@@ -82,7 +84,9 @@ function demoSummary(s) { // 서버 summarize 와 같은 규칙
   const t = demoTeacher(s.id);
   return { id: s.id, name: s.name, managed: !s.email, group: d.profile?.group || null, streak, week, today: week[6], openTasks: tasks.filter((x) => !x.done).map((x) => x.text).slice(0, 5), doneCount: tasks.filter((x) => x.done).length, openCount: tasks.filter((x) => !x.done).length, riasec: [], quiz: [], deep,
     teacher: t ? { id: t.id, name: t.name } : null, awaiting: isStaffRole() && d.messages?.at(-1)?.from === 'learner', lastActive: last, checkinsWeek: (d.checkins || []).filter((c) => c.date >= dk(m)).length, goal: { type: d.goal?.type || 'general', label: d.goal?.label || '', dday },
-    intensity: sd === undefined ? null : sd >= 3.8 ? 'loose' : sd >= 3.0 ? 'normal' : 'tight', flags: { idle, validity, wellbeing, ddaySoon: dday !== null && dday >= 0 && dday <= 14 }, status: idle || validity || wellbeing ? 'watch' : 'ok' };
+    intensity: sd === undefined ? null : sd >= 3.8 ? 'loose' : sd >= 3.0 ? 'normal' : 'tight', flags: { idle, validity, wellbeing, ddaySoon: dday !== null && dday >= 0 && dday <= 14 }, status: idle || validity || wellbeing ? 'watch' : 'ok',
+    className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', ...(() => { const att = d.attendance || {}, ks = Object.keys(att), v30 = ks.map((k) => att[k]); return { att, attRate: v30.length ? Math.round(100 * v30.filter((x) => x === 'p' || x === 'l').length / v30.length) : null }; })(),
+    inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', passEnd: d.profile?.passEnd || '', todayMin: (d.log || {})[dk()] || 0 };
 }
 const isStaffRole = () => ['teacher', 'admin'].includes(demoRole());
 const demoErr = (m) => { throw new Error(m); };
@@ -121,6 +125,7 @@ function demoApi(path, { method = 'GET', body } = {}) {
   }
   if ((m = p.match(/^\/api\/students\/([\w-]+)$/)) && method === 'DELETE') { delete demo.students[m[1]]; return { ok: true }; }
   if (p === '/api/attendance' && method === 'POST') { let n = 0; for (const [id, st] of Object.entries(body.marks || {})) { const x = demo.students[id]; if (!x) continue; x.data.attendance = { ...(x.data.attendance || {}) }; if (st) x.data.attendance[body.date] = st; else delete x.data.attendance[body.date]; n++; } return { saved: n, skipped: 0 }; }
+  if (p === '/api/visits' && method === 'POST') { let n = 0; for (const [id, st] of Object.entries(body.marks || {})) { const x = demo.students[id]; if (!x) continue; const v = [...(x.data.visits || [])], o = v.findLastIndex((y) => !y.out); if (st === 'in' && o < 0) v.push({ date: body.date, in: body.time, out: '' }); else if (st === 'out' && o >= 0) { v[o].out = body.time; const m = (+body.time.slice(0, 2) * 60 + +body.time.slice(3)) - (+v[o].in.slice(0, 2) * 60 + +v[o].in.slice(3)); if (m > 0) x.data.log = { ...(x.data.log || {}), [body.date]: ((x.data.log || {})[body.date] || 0) + m }; } else continue; x.data.visits = v; n++; } return { saved: n, skipped: 0 }; }
   if (p === '/api/analytics/export') return { rows: [] };
   if (p === '/api/analytics' && method === 'GET') {
     const L2 = Object.values(demo.students), tests = {};

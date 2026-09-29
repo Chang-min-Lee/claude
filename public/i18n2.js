@@ -252,3 +252,15 @@ Object.assign(UI.vi, {
   an_r_goal: '{n} học viên đã nhập mục tiêu', an_r_grades: '{n} học viên đã nhập điểm số', an_r_sessions: '{n} học viên có ghi chép tư vấn (tổng {s})', an_r_diag: '{n} học viên có bản chẩn đoán', an_r_retest: '{n} học viên đã làm lại bài kiểm tra', an_r_att: '{n} bản ghi điểm danh', an_r_research: '{n} học viên đồng ý dùng dữ liệu thống kê',
   an_groups: 'Theo nhóm tuổi', an_export: 'Tải dữ liệu của học viên đã đồng ý (CSV)', an_export_note: 'Chỉ gồm mã ngẫu nhiên và điểm kiểm tra, không có tên/trường/mục tiêu, và chỉ học viên đồng ý dùng thống kê. Loại trừ sức khỏe tinh thần.', an_exported: 'Đã tải dữ liệu của {n} học viên.',
 });
+
+// 스터디카페
+Object.assign(UI.ko, {
+  tab_cafe: '입퇴실', ot_studycafe: '스터디카페', cafe_title: '스터디카페', cafe_in: '입실', cafe_out: '퇴실', cafe_in_now: '이용 중', cafe_since: '{time} 입실', cafe_seat: '좌석', cafe_pass: '이용권', cafe_pass_end: '이용권 만료일',
+  cafe_pass_left: '{n}일 남음', cafe_pass_expired: '만료됨', cafe_pass_soon: '이용권 만료 임박(7일)', cafe_console: '입·퇴실 관리', cafe_help: '이름 옆 버튼으로 입실·퇴실을 기록해요. 퇴실하면 이용 시간이 학습 기록에 자동으로 더해져요. 학생 본인도 홈 화면에서 직접 누를 수 있어요.',
+  cafe_today_total: '오늘 총 이용', cafe_search: '이름·좌석 검색', cafe_only_in: '이용 중만', cafe_today: '오늘 이용', cafe_empty: '학생을 등록하면 여기에 나타나요.',
+});
+Object.assign(UI.vi, {
+  tab_cafe: 'Vào/ra', ot_studycafe: 'Quán cà phê học tập', cafe_title: 'Quán cà phê học tập', cafe_in: 'Vào', cafe_out: 'Ra', cafe_in_now: 'Đang sử dụng', cafe_since: 'Vào lúc {time}', cafe_seat: 'Chỗ ngồi', cafe_pass: 'Gói sử dụng', cafe_pass_end: 'Ngày hết hạn gói',
+  cafe_pass_left: 'Còn {n} ngày', cafe_pass_expired: 'Đã hết hạn', cafe_pass_soon: 'Gói sắp hết hạn (7 ngày)', cafe_console: 'Quản lý vào/ra', cafe_help: 'Bấm nút cạnh tên để ghi vào/ra. Khi ra, thời gian sử dụng tự động cộng vào nhật ký học tập. Học viên cũng có thể tự bấm ở màn hình chính.',
+  cafe_today_total: 'Tổng thời gian hôm nay', cafe_search: 'Tìm tên/chỗ ngồi', cafe_only_in: 'Chỉ đang sử dụng', cafe_today: 'Hôm nay', cafe_empty: 'Đăng ký học viên thì sẽ hiện ở đây.',
+});

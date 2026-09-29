@@ -321,6 +321,7 @@ function summarize(u, todayStr, viewer) {
     intensity: sdl === undefined ? null : sdl >= 3.8 ? 'loose' : sdl >= 3.0 ? 'normal' : 'tight',
     awaiting: !!(viewer && isStaff(viewer) && d.messages?.at(-1)?.from === 'learner'),
     flags, status: idle || validity || wellbeing ? 'watch' : 'ok',
+    inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', passEnd: d.profile?.passEnd || '', todayMin: (d.log || {})[todayStr] || 0,
     className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
   };
 }
@@ -484,6 +485,27 @@ const routes = {
       const att = { ...(l.data?.attendance || {}) };
       if (st === '') delete att[b.date]; else att[b.date] = st;
       storeData(l, { attendance: sanitizers.attendance(att) }); saved++;
+    }
+    return { saved, skipped };
+  },
+  // 스터디카페 입·퇴실: { date, time:'HH:MM', marks: { 학생id: 'in'|'out' } }. 퇴실하면 이용 시간이 학습 기록(log)에 더해진다.
+  'POST /api/visits': async (req) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const b = await readBody(req);
+    if (!isDate(b.date) || !/^\d{2}:\d{2}$/.test(b.time || '')) throw new HttpError(400, 'badReq');
+    let saved = 0, skipped = 0;
+    for (const [id, st] of Object.entries(b.marks && typeof b.marks === 'object' ? b.marks : {}).slice(0, 300)) {
+      const l = db.users[id];
+      if (!l || l.role !== 'learner' || !canWrite(u, l) || !['in', 'out'].includes(st)) { skipped++; continue; }
+      const visits = [...(l.data?.visits || [])], open = visits.findLastIndex((v) => !v.out), clean = {};
+      if (st === 'in') { if (open >= 0) { skipped++; continue; } visits.push({ date: b.date, in: b.time, out: '' }); }
+      else {
+        if (open < 0) { skipped++; continue; }
+        const v = visits[open]; v.out = b.time;
+        const mins = v.date === b.date ? (+b.time.slice(0, 2) * 60 + +b.time.slice(3)) - (+v.in.slice(0, 2) * 60 + +v.in.slice(3)) : 0;
+        if (mins > 0) clean.log = sanitizers.log({ ...(l.data?.log || {}), [v.date]: ((l.data?.log || {})[v.date] || 0) + mins });
+      }
+      clean.visits = sanitizers.visits(visits); storeData(l, clean); saved++;
     }
     return { saved, skipped };
   },

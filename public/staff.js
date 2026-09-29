@@ -31,7 +31,7 @@ async function loadRoster() {
   roster.loading = true;
   try { const r = await api('/api/dashboard?today=' + today()); roster.learners = r.learners; roster.teachers = r.teachers || []; roster.err = ''; } catch (e) { roster.err = e.message; }
   roster.loading = false; roster.loaded = true;
-  if (['roster', 'classes'].includes(state.tab) && !state.viewAs) render();
+  if (['roster', 'classes', 'cafe'].includes(state.tab) && !state.viewAs) render();
 }
 function weeklySummary(list) {
   const n = list.length, w = list.filter((l) => l.status === 'watch');
@@ -110,7 +110,7 @@ function renderRegister(app) {
       <div class="row"><span class="sub">${t('goal_date')}</span><input type="date" id="rgdate" style="max-width:170px"></div>
       <label class="row"><input type="checkbox" id="rs1" checked style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
       <label class="row"><input type="checkbox" id="rs2" checked style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
-      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'studyroom', 'consultant'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
+      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'studyroom', 'consultant', 'studycafe'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
       ${admin ? `<div class="row"><select id="rteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></div>` : ''}
       <textarea id="rnote" rows="2" maxlength="200" placeholder="${t('reg_note')}"></textarea>
       <p class="sub">${t('reg_consent_note')}</p>

@@ -26,6 +26,7 @@ const DEFAULTS = {
   consent: { wellbeing: false, research: false }, schedule: [], weekplan: [], weekhist: [],
   goal: { type: 'general', label: '', date: '', note: '', milestones: [] },
   grades: [], checkins: [], closeouts: [], diag: {}, diagHist: [],
+  visits: [], // 스터디카페 입·퇴실 기록
   attendance: {}, // 출결(강사 기록) 날짜 → p/l/a/e
   intake: { concern: '', goal: '', strengths: '', interests: '', habits: '', background: '' }, // 초기 상담 문진
   career: { job: '', industry: '', years: 0, target: '', targetIndustry: '', skills: [], motive: '', constraints: '' }, jobs: [], // 성인·대학생 커리어
@@ -135,7 +136,7 @@ function profileForAI() {
 const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'quiz', 'coach', 'account'];
 const STUDENT_VIEW_TABS = ['home', 'input', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
-const STAFF_TABS = ['roster', 'classes', 'register', 'data', 'staff', 'account'];
+const STAFF_TABS = ['roster', 'classes', 'cafe', 'register', 'data', 'staff', 'account'];
 const roleOf = () => state.user?.role || 'learner';
 const ICONS = {
   input: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13.5 8.5l3 3"/>',
@@ -152,6 +153,7 @@ const ICONS = {
   roster: '<circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19.5c.7-3.2 3-4.9 5.5-4.9s4.8 1.7 5.5 4.9"/><path d="M16 5.5a3 3 0 0 1 0 6M17.5 14.9c1.9.5 3 2 3.5 4.6"/>',
   register: '<circle cx="10" cy="8.5" r="3.4"/><path d="M3.5 19.5c.8-3.3 3.2-5 6.5-5s5.7 1.7 6.5 5M19 8v6M16 11h6"/>',
   classes: '<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><path d="M3.5 9.5h17M8 13l2 2 3.5-3.5"/>',
+  cafe: '<path d="M5 8h11v6a4 4 0 0 1-4 4H9a4 4 0 0 1-4-4z"/><path d="M16 9h1.5a2.5 2.5 0 0 1 0 5H16M8 4v2M12 4v2"/>',
   data: '<path d="M4 20V10M10 20V4M16 20v-7M21 20H3"/>',
   career: '<rect x="3.5" y="7.5" width="17" height="12" rx="2.5"/><path d="M9 7.5V6a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 6v1.5M3.5 13h17"/>',
   staff: '<path d="M12 3.5 5 6v5.5c0 4.2 2.8 7.4 7 9 4.2-1.6 7-4.8 7-9V6z"/><path d="m9.3 12 2 2 3.6-3.8"/>',
@@ -174,7 +176,7 @@ function tabsNow() {
   if (role === 'admin') return STAFF_TABS;
   return LEARNER_TABS.filter(tabOk);
 }
-const RENDERERS = () => ({ classes: renderClasses, data: renderAnalytics, career: renderCareer, home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
+const RENDERERS = () => ({ cafe: renderCafe, classes: renderClasses, data: renderAnalytics, career: renderCareer, home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
   document.documentElement.lang = lang; document.title = orgName(); $('#title').textContent = orgName();
@@ -237,6 +239,7 @@ function renderHome(app) {
       <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
     </div><div>
       ${nextSessionCard()}
+      ${visitCard()}
       ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}
       <div class="card"><h2>${t('heat_title')}</h2>${heatmapHtml()}<p class="sub">${t('heat_hint')}</p></div>
       <div class="card"><h2>${t('bd_title')}</h2>${badgesHtml()}</div>

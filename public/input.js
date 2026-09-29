@@ -1,5 +1,5 @@
 // 학생 정보·입력 (강사·관리자): 한 화면에서 기본 정보·목표·검사 결과·성적·시간표·주간계획·할 일·진단서를 모두 입력/수정
-const ORG_TYPES = ['language', 'studyroom', 'consultant'];
+const ORG_TYPES = ['language', 'studyroom', 'consultant', 'studycafe'];
 const inOpen = new Set(['basic']); // 펼쳐 둔 섹션(다시 그려도 유지)
 const IN_SECTIONS = [['basic', 'in_s_basic'], ['intake', 'in_s_intake'], ['attend', 'in_s_attend'], ['career', 'in_s_career'], ['goal', 'in_s_goal'], ['tests', 'in_s_tests'], ['grades', 'in_s_grades'], ['sched', 'in_s_sched'], ['wp', 'in_s_wp'], ['tasks', 'in_s_tasks'], ['diag', 'in_s_diag']];
 let inDel = false, inMsg = '';
@@ -31,6 +31,7 @@ function basicCard(el) {
       <input type="text" id="bschool" maxlength="40" placeholder="${t('reg_school')}" value="${esc(p.school)}"></div>
     <div class="row"><select id="borg"><option value="">${t('ot_none')}</option>${ORG_TYPES.map((k) => `<option value="${k}" ${p.orgType === k ? 'selected' : ''}>${t('ot_' + k)}</option>`).join('')}</select></div>
     <div class="row"><input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}"><select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select></div>
+    <div class="row"><input type="text" id="bseat" maxlength="20" placeholder="${t('cafe_seat')}" value="${esc(p.seat || '')}"><input type="text" id="bpass" maxlength="30" placeholder="${t('cafe_pass')}" value="${esc(p.passType || '')}"><input type="date" id="bpend" value="${esc(p.passEnd || '')}" title="${t('cafe_pass_end')}" style="max-width:170px"></div>
     <div class="row"><input type="text" id="bpname" maxlength="20" placeholder="${t('par_name')}" value="${esc(p.parentName || '')}"><input type="text" id="bpphone" maxlength="30" placeholder="${t('par_phone')}" value="${esc(p.parentPhone || '')}"></div>
     <div class="row"><span class="sub">${t('ns_label')}</span><input type="date" id="bnext" value="${esc(p.nextSession || '')}" style="max-width:170px"></div>
     <label class="row"><input type="checkbox" id="bs1" ${sv.study !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
@@ -43,11 +44,11 @@ function basicCard(el) {
     <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
   bindParentLinkCard();
   const upd = () => {
-    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value;
+    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value; p.seat = $('#bseat').value.trim(); p.passType = $('#bpass').value.trim(); p.passEnd = $('#bpend').value;
     p.services = { study: $('#bs1').checked, career: $('#bs2').checked }; p.note = $('#bnote').value.trim(); p.teacherNote = $('#btnote').value.trim();
     state.viewAs.name = p.name; save('profile'); $('#bmsg').textContent = t('saved');
   };
-  ['#bname', '#bgroup', '#bschool', '#borg', '#bclass', '#bstatus', '#bpname', '#bpphone', '#bnext', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => ($(s).onchange = upd));
+  ['#bname', '#bgroup', '#bschool', '#borg', '#bclass', '#bstatus', '#bpname', '#bpphone', '#bnext', '#bseat', '#bpass', '#bpend', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => ($(s).onchange = upd));
   if ($('#brs')) $('#brs').onchange = (e) => { state.consent = { ...state.consent, research: e.target.checked }; save('consent'); $('#bmsg').textContent = t('saved'); };
   if ($('#bteacher')) $('#bteacher').onchange = async (e) => {
     try { await api(`/api/students/${v.id}/meta`, { method: 'PUT', body: { teacherId: e.target.value } }); v.teacher = roster.teachers.find((x) => x.id === e.target.value) || null; roster.loaded = false; $('#bmsg').textContent = t('saved'); } catch (er) { $('#bmsg').textContent = er.message; }

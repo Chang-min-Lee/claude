@@ -135,3 +135,53 @@ function renderAnalytics(app) {
     } catch (e) { $('#anmsg').textContent = e.message; }
   };
 }
+
+// ---------- 스터디카페: 입·퇴실 ----------
+const hhmm = (d = new Date()) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const minsOf = (a, b) => (+b.slice(0, 2) * 60 + +b.slice(3)) - (+a.slice(0, 2) * 60 + +a.slice(3));
+const openVisit = () => state.visits.findLast((v) => !v.out);
+const passLeft = (end) => (end ? daysUntil(end) : null);
+
+// 학생 홈: 입실/퇴실 (스터디카페 이용자 또는 이미 기록이 있는 학생)
+function visitCard() {
+  if (state.viewAs || !(state.profile?.orgType === 'studycafe' || state.visits.length)) return '';
+  const o = openVisit(), left = passLeft(state.profile.passEnd);
+  return `<div class="card"><h2>☕ ${t('cafe_title')}</h2>
+    ${o ? `<p><span class="pill ok">${t('cafe_in_now')}</span> ${t('cafe_since', { time: esc(o.in) })}</p><button class="primary" id="vout">${t('cafe_out')}</button>` : `<button class="primary" id="vin">${t('cafe_in')}</button>`}
+    ${state.profile.seat ? `<p class="sub">${t('cafe_seat')}: <b>${esc(state.profile.seat)}</b></p>` : ''}
+    ${left !== null ? `<p class="sub">${esc(state.profile.passType || t('cafe_pass'))} · ${left < 0 ? t('cafe_pass_expired') : t('cafe_pass_left', { n: left })}</p>` : ''}</div>`;
+}
+document.addEventListener('click', (e) => { // 홈 화면의 입·퇴실 버튼
+  const id = e.target?.id;
+  if (id !== 'vin' && id !== 'vout') return;
+  if (id === 'vin') state.visits = [...state.visits, { date: today(), in: hhmm(), out: '' }];
+  else {
+    const o = openVisit(); if (!o) return;
+    o.out = hhmm(); const m = o.date === today() ? minsOf(o.in, o.out) : 0;
+    if (m > 0) { state.log[o.date] = Math.min(1440, (state.log[o.date] || 0) + m); save('log'); }
+  }
+  save('visits'); render();
+});
+
+// 강사 콘솔: 입·퇴실 (카운터에서 학생 이름 옆 버튼을 누른다)
+const cafe = { q: '', onlyIn: false, msg: '' };
+function renderCafe(app) {
+  if (!roster.loaded && !roster.loading) loadRoster();
+  const active = roster.learners.filter((l) => l.enroll !== 'left'), q = cafe.q.trim().toLowerCase();
+  const list = active.filter((l) => (!q || l.name.toLowerCase().includes(q) || (l.seat || '').toLowerCase().includes(q)) && (!cafe.onlyIn || l.inNow));
+  const inN = active.filter((l) => l.inNow).length, soon = active.filter((l) => l.passEnd && passLeft(l.passEnd) <= 7).length, totalMin = sum(active.map((l) => l.todayMin));
+  app.innerHTML = `<div class="card"><h2>${t('cafe_console')}</h2><p class="sub">${t('cafe_help')}</p>
+      <div class="tiles"><div class="tile"><b>${inN}</b><span class="sub">${t('cafe_in_now')}</span></div><div class="tile"><b>${Math.round(totalMin / 60 * 10) / 10}h</b><span class="sub">${t('cafe_today_total')}</span></div><div class="tile"><b>${soon}</b><span class="sub">${t('cafe_pass_soon')}</span></div></div>
+      <div class="row"><input type="text" id="cfq" placeholder="${t('cafe_search')}" value="${esc(cafe.q)}"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cfin" ${cafe.onlyIn ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cafe_only_in')}</span></label></div>
+      <span class="sub" id="cfmsg">${esc(cafe.msg)}</span></div>
+    ${list.length ? `<div class="card"><div class="tscroll"><table class="wplan"><thead><tr><th>${t('roster_name')}</th><th>${t('cafe_seat')}</th><th>${t('cafe_today')}</th><th>${t('cafe_pass')}</th><th></th></tr></thead><tbody>${list.map((l) => { const left = l.passEnd ? passLeft(l.passEnd) : null; return `<tr><td class="subj">${esc(l.name)}${l.inNow ? ` <span class="pill ok">${t('cafe_in_now')}</span>` : ''}</td><td>${esc(l.seat || '-')}</td><td>${unit('unit_min', l.todayMin)}</td>
+      <td class="detail">${left === null ? '-' : `${esc(l.passType || '')} ${left < 0 ? `<span class="tag weak">${t('cafe_pass_expired')}</span>` : left <= 7 ? `<span class="tag weak">${t('cafe_pass_left', { n: left })}</span>` : esc(l.passEnd)}`}</td>
+      <td><button class="${l.inNow ? '' : 'primary'}" data-cf="${esc(l.id)}:${l.inNow ? 'out' : 'in'}">${l.inNow ? t('cafe_out') : t('cafe_in')}</button></td></tr>`; }).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.loading ? t('loading') : t('cafe_empty')}</p></div>`}`;
+  $('#cfq').oninput = (e) => { cafe.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('#cfq'); el.focus(); el.setSelectionRange(pos, pos); };
+  $('#cfin').onchange = (e) => { cafe.onlyIn = e.target.checked; render(); };
+  app.querySelectorAll('[data-cf]').forEach((b) => (b.onclick = async () => {
+    const [id, st] = b.dataset.cf.split(':'); b.disabled = true;
+    try { await api('/api/visits', { method: 'POST', body: { date: today(), time: hhmm(), marks: { [id]: st } } }); cafe.msg = ''; } catch (e) { cafe.msg = e.message; }
+    roster.loaded = false; render();
+  }));
+}
