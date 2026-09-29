@@ -290,3 +290,17 @@ Object.assign(UI.vi, {
   iv_val_why: 'Bài {tests} có dấu hiệu trả lời qua loa như lặp lại cùng một đáp án.', iv_val_todo: 'Đừng tin hoàn toàn kết quả này. Trao đổi với học viên về cách làm bài và đề nghị làm lại ở nơi yên tĩnh.', iv_val_tpl: '{name} à, bài kiểm tra vừa rồi có vẻ em làm hơi vội. Khi rảnh mình làm lại thong thả nhé?',
   iv_dday_why: '"{label}" còn D-{n}.', iv_dday_todo: 'Kiểm tra các mốc, điểm số, việc cần làm còn lại và thu gọn 3 ưu tiên cho tuần này.', iv_dday_tpl: '{name} à, còn D-{n} là đến "{label}". Mình cùng chọn ưu tiên tuần này nhé?',
 });
+
+// 베타 테스트
+Object.assign(UI.ko, {
+  fb_title: '의견 보내기', fb_help: '불편한 점, 이해가 안 되는 화면, 바라는 기능을 알려 주세요. 개발에 바로 반영해요.', fb_bug: '오류·고장', fb_confusing: '이해하기 어려움', fb_idea: '있으면 좋겠어요', fb_praise: '좋았어요',
+  fb_ph: '무엇이 어땠는지 편하게 적어 주세요 (어느 화면인지 함께 적으면 더 좋아요)', fb_send: '보내기', fb_need: '내용을 적어 주세요.', fb_thanks: '고마워요! 의견을 받았어요.', fb_admin: '베타 의견함', fb_anon: '로그인 전', fb_reopen: '다시 열기', fb_done: '처리함', fb_none: '아직 받은 의견이 없어요.',
+  beta_note: '베타 테스트 중이에요. 불편한 점은 왼쪽 아래(모바일은 위쪽)의 💬 버튼으로 알려 주세요.',
+  bk_title: '데이터 백업', bk_help: '모든 학생·계정 데이터를 파일 하나로 내려받아요. 비밀번호(암호화됨)와 개인정보가 들어 있으니 안전한 곳에만 보관하고, 일주일에 한 번은 받아 두세요.', bk_btn: '백업 파일 내려받기', bk_done: '내려받았어요. 안전한 곳에 보관하세요.',
+});
+Object.assign(UI.vi, {
+  fb_title: 'Gửi ý kiến', fb_help: 'Hãy cho chúng tôi biết điều bất tiện, màn hình khó hiểu hoặc tính năng mong muốn. Chúng tôi sẽ cải thiện ngay.', fb_bug: 'Lỗi', fb_confusing: 'Khó hiểu', fb_idea: 'Mong có thêm', fb_praise: 'Rất tốt',
+  fb_ph: 'Hãy viết thoải mái (ghi rõ màn hình nào thì càng tốt)', fb_send: 'Gửi', fb_need: 'Vui lòng nhập nội dung.', fb_thanks: 'Cảm ơn bạn! Chúng tôi đã nhận được ý kiến.', fb_admin: 'Hộp ý kiến beta', fb_anon: 'Chưa đăng nhập', fb_reopen: 'Mở lại', fb_done: 'Đã xử lý', fb_none: 'Chưa có ý kiến nào.',
+  beta_note: 'Đang chạy thử (beta). Nếu có điều bất tiện, hãy bấm nút 💬 ở góc dưới bên trái (trên điện thoại ở phía trên).',
+  bk_title: 'Sao lưu dữ liệu', bk_help: 'Tải toàn bộ dữ liệu học viên và tài khoản thành một tệp. Tệp chứa mật khẩu (đã mã hóa) và thông tin cá nhân nên chỉ giữ ở nơi an toàn; hãy tải ít nhất mỗi tuần một lần.', bk_btn: 'Tải tệp sao lưu', bk_done: 'Đã tải xuống. Hãy lưu ở nơi an toàn.',
+});

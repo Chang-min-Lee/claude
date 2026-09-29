@@ -3,6 +3,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const os = require('os');
 
 const PORT = process.env.PORT || 3000;
 const MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-5-5';
@@ -364,7 +365,9 @@ function analyticsOf(list) {
   };
 }
 // 기관(학원) 설정: 이름·연락처. 로그인 화면과 문서 머리글에 쓰인다.
-const orgSettings = () => ({ orgName: '', orgPhone: '', orgEmail: '', ...(db.kv?.org || {}) });
+const BETA = process.env.BETA === '1';
+const orgSettings = () => ({ orgName: '', orgPhone: '', orgEmail: '', ...(db.kv?.org || {}), beta: BETA });
+const FB_KINDS = ['bug', 'confusing', 'idea', 'praise'];
 const routes = {
   'GET /healthz': async () => ({ ok: true, storage: store.kind }),
   'GET /api/settings': async () => orgSettings(),
@@ -385,6 +388,25 @@ const routes = {
     if (d.deep) { d.deep = { ...d.deep }; delete d.deep.wellbeing; }
     const t = teacherOf(l.id);
     return { name: l.name, data: d, teacher: t ? t.name : '', org: orgSettings() };
+  },
+  // 베타 의견: 로그인하지 않아도 보낼 수 있고, 관리자만 읽는다.
+  'POST /api/feedback': async (req) => {
+    limit('fb:' + ip(req), 20, 10 * 60000);
+    const b = await readBody(req), text = str(b.text, 1000);
+    if (!text) throw new HttpError(400, 'noNote');
+    const tok = String(req.headers.authorization || '').replace(/^Bearer\s+/i, ''), sess = tok && db.sessions[sha(tok)], who = sess && sess.exp > Date.now() && db.users[sess.userId];
+    const list = [...(db.kv.feedback || []), { id: crypto.randomUUID(), at: new Date().toISOString(), kind: FB_KINDS.includes(b.kind) ? b.kind : 'idea', text, where: str(b.where, 40), lang: langOf(req), who: who ? `${who.name} (${who.role})` : '', done: false }].slice(-500);
+    db.kv.feedback = list; store.saveKv('feedback', list);
+    return { ok: true };
+  },
+  'GET /api/feedback': async (req) => { const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden'); return { feedback: (db.kv.feedback || []).slice().reverse() }; },
+  // 데이터 전체 백업 내려받기 (관리자). 비밀번호 해시와 학생 개인정보가 들어 있으니 안전한 곳에 보관해야 한다.
+  'GET /api/backup': async (req) => {
+    const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden');
+    limit('backup:' + u.id, 10, 60 * 60000);
+    const dest = path.join(os.tmpdir(), `jinro-backup-${Date.now()}`);
+    try { store.backup(dest); const body = fs.readFileSync(dest); return { __raw: { status: 200, body, headers: { 'Content-Type': 'application/octet-stream', 'Content-Disposition': `attachment; filename="jinro-backup-${dayKey(new Date())}.${store.kind === 'sqlite' ? 'sqlite' : 'json'}"` } } }; }
+    finally { fs.rmSync(dest, { force: true }); }
   },
   'POST /api/signup': async (req) => {
     limit('auth:' + ip(req), 20, 15 * 60000);
@@ -621,6 +643,11 @@ const routes = {
 // ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
 const paramRoutes = [
   // 개입 안내 보류: 강사가 "확인했어요"를 누르면 며칠간 '확인 필요'에서 뺀다 (days 0 이면 해제)
+  ['POST', /^\/api\/feedback\/([\w-]+)\/done$/, async (req, url, [id]) => { // 처리 완료 표시 토글 (관리자)
+    const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden');
+    const f = (db.kv.feedback || []).find((x) => x.id === id); if (!f) throw new HttpError(404, 'notFound');
+    f.done = !f.done; store.saveKv('feedback', db.kv.feedback); return { done: f.done };
+  }],
   ['POST', /^\/api\/students\/([\w-]+)\/snooze$/, async (req, url, [id]) => {
     const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
     const l = learnerOr404(u, id, true), b = await readBody(req), days = intIn(b.days, 0, 14, 3);
@@ -760,12 +787,14 @@ const paramRoutes = [
 http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   for (const [k, v] of Object.entries(SEC_HEADERS)) res.setHeader(k, v);
+  if (BETA) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   if (TRUST_PROXY && req.headers['x-forwarded-proto'] === 'https') res.setHeader('Strict-Transport-Security', 'max-age=15552000');
   let handler = routes[`${req.method} ${url.pathname}`], args = [];
   if (!handler) for (const [method, re, fn] of paramRoutes) { const m = method === req.method && url.pathname.match(re); if (m) { handler = fn; args = [m.slice(1)]; break; } }
   if (handler) {
     try {
       const out = await handler(req, url, ...args);
+      if (out && out.__raw) { res.writeHead(out.__raw.status, out.__raw.headers); return res.end(out.__raw.body); }
       res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
       return res.end(JSON.stringify(out));
     } catch (e) {
@@ -785,5 +814,13 @@ http.createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': TYPES[path.extname(file)] || 'application/octet-stream' });
     res.end(buf);
   });
-}).listen(PORT, () => console.log(`http://localhost:${PORT}`));
+}).listen(PORT, () => {
+  console.log(`http://localhost:${PORT}`);
+  const warn = (m) => console.warn('⚠ ' + m);
+  if (!process.env.ANTHROPIC_API_KEY) warn('ANTHROPIC_API_KEY 가 없어요. AI 코치·퀴즈·진단서·검사 해석은 꺼져 있어요.');
+  if (!Object.values(db.users).some((u) => u.role === 'admin')) warn('관리자 계정이 없어요. ADMIN_EMAIL / ADMIN_PASSWORD(8자 이상)를 설정하세요.');
+  if (process.env.NODE_ENV === 'production' && !process.env.DATA_DIR) warn('DATA_DIR 가 설정되지 않았어요. 디스크를 연결하지 않으면 배포할 때마다 데이터가 사라질 수 있어요.');
+  if (store.kind !== 'sqlite') warn('SQLite 를 쓸 수 없어 JSON 파일 저장으로 동작 중이에요. (Node 22.5 이상 권장)');
+  if (BETA) console.log('베타 모드: 화면에 베타 안내가 나오고 검색엔진 색인을 막아요.');
+});
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { store.close(); process.exit(0); });

@@ -131,3 +131,59 @@ function renderLegal(kind) {
   langSel.onchange = () => { setLang(langSel.value); draw(); };
   draw();
 }
+
+// ---------- 베타: 의견 보내기 · 안내 배너 · 백업 ----------
+const FB_KINDS = ['bug', 'confusing', 'idea', 'praise'];
+function openFeedback() {
+  if (document.getElementById('fbmodal')) return;
+  const m = document.createElement('div'); m.id = 'fbmodal'; m.className = 'modal';
+  m.innerHTML = `<div class="modal-box" role="dialog" aria-modal="true"><h2>💬 ${t('fb_title')}</h2><p class="sub">${t('fb_help')}</p>
+    <div class="row">${FB_KINDS.map((k, i) => `<label class="tag" style="cursor:pointer"><input type="radio" name="fbk" value="${k}" ${i === 0 ? 'checked' : ''} style="width:auto"> ${t('fb_' + k)}</label>`).join('')}</div>
+    <textarea id="fbtext" rows="4" maxlength="1000" placeholder="${t('fb_ph')}"></textarea>
+    <div class="row"><button class="primary" id="fbsend">${t('fb_send')}</button><button id="fbclose">${t('btn_cancel')}</button><span class="sub" id="fbmsg"></span></div></div>`;
+  document.body.appendChild(m);
+  const close = () => m.remove();
+  m.onclick = (e) => { if (e.target === m) close(); };
+  $('#fbclose').onclick = close; $('#fbtext').focus();
+  $('#fbsend').onclick = async () => {
+    const text = $('#fbtext').value.trim(); if (!text) { $('#fbmsg').textContent = t('fb_need'); return; }
+    $('#fbsend').disabled = true;
+    try { await api('/api/feedback', { method: 'POST', body: { text, kind: document.querySelector('input[name=fbk]:checked').value, where: state.tab } }); $('#fbmsg').textContent = t('fb_thanks'); setTimeout(close, 1200); }
+    catch (e) { $('#fbmsg').textContent = e.message; $('#fbsend').disabled = false; }
+  };
+}
+if ($('#fbbtn')) $('#fbbtn').onclick = openFeedback;
+let betaHidden = false;
+const betaBanner = () => (state.org?.beta && !betaHidden ? `<div class="preview-note noprint">🧪 ${t('beta_note')} <button id="betaclose" style="padding:2px 10px">✕</button></div>` : '');
+
+// 관리자: 받은 의견 목록 (데이터 탭)
+const fbs = { list: null, err: '' };
+async function loadFeedback() { try { fbs.list = (await api('/api/feedback')).feedback; } catch (e) { fbs.err = e.message; fbs.list = []; } if (state.tab === 'data') render(); }
+function feedbackCard() {
+  if (roleOf() !== 'admin') return '';
+  if (!fbs.list) { loadFeedback(); return `<div class="card"><h2>${t('fb_admin')}</h2><p class="sub">${t('loading')}</p></div>`; }
+  return `<div class="card"><h2>${t('fb_admin')} <span class="sub">${fbs.list.length}</span></h2>${fbs.list.length ? fbs.list.slice(0, 50).map((f) => `<div class="task ${f.done ? 'done' : ''}"><span><span class="tag ${f.kind === 'bug' ? 'weak' : ''}">${t('fb_' + f.kind)}</span> <span class="sub">${esc(f.at.slice(0, 10))} · ${esc(f.who || t('fb_anon'))} · ${esc(f.where)}</span><br>${esc(f.text)}</span><button data-fbdone="${esc(f.id)}">${f.done ? t('fb_reopen') : t('fb_done')}</button></div>`).join('') : `<p class="sub">${t('fb_none')}</p>`}
+    <div class="row"><button id="fbcsv">${t('csv_btn')}</button><span class="sub">${esc(fbs.err)}</span></div></div>`;
+}
+function bindFeedbackCard() {
+  document.querySelectorAll('[data-fbdone]').forEach((b) => (b.onclick = async () => { try { await api(`/api/feedback/${b.dataset.fbdone}/done`, { method: 'POST' }); } catch {} fbs.list = null; render(); }));
+  if ($('#fbcsv')) $('#fbcsv').onclick = () => downloadCsv(`feedback-${today()}.csv`, [['date', 'type', 'who', 'where', 'text', 'done'], ...fbs.list.map((f) => [f.at.slice(0, 10), f.kind, f.who, f.where, f.text, f.done ? 1 : 0])]);
+}
+
+// 관리자: 전체 데이터 백업 내려받기
+function backupCard() {
+  return `<div class="card"><h2>${t('bk_title')}</h2><p class="sub">${t('bk_help')}</p><button id="bkdl">${t('bk_btn')}</button> <span class="sub" id="bkmsg"></span></div>`;
+}
+function bindBackupCard() {
+  if (!$('#bkdl')) return;
+  $('#bkdl').onclick = async () => {
+    $('#bkmsg').textContent = t('loading');
+    try {
+      const r = await fetch('/api/backup', { headers: { Authorization: 'Bearer ' + state.token } });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || t('req_failed'));
+      const cd = r.headers.get('content-disposition') || '', name = (cd.match(/filename="([^"]+)"/) || [])[1] || 'backup';
+      const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(await r.blob()), download: name }); document.body.appendChild(a); a.click(); a.remove();
+      $('#bkmsg').textContent = t('bk_done');
+    } catch (e) { $('#bkmsg').textContent = e.message; }
+  };
+}

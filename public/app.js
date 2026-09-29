@@ -188,9 +188,10 @@ function render() {
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
-  if (onboarding) { state.tab === 'account' ? renderAccount(app) : renderOnboarding(app); return app.insertAdjacentHTML('beforeend', legalFooter()); }
+  if (onboarding) { state.tab === 'account' ? renderAccount(app) : renderOnboarding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());
+  app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); };
   if (state.viewAs) { // 학생을 열어 본 상태의 안내 줄
     app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}
       ${!state.ro && !state.viewAs.managed && !PREVIEW ? ` <button id="resetcode">🔑 ${t('reset_issue')}</button>` : ''} <span class="sub" id="resetmsg"></span></div>`);
@@ -356,7 +357,7 @@ function renderAccount(app) {
     const role = state.user.role, learner = role === 'learner';
     app.innerHTML = `<div class="card"><h2>${esc(t('acc_hello', { name: state.user.name, role: t('role_' + role) }))}</h2>
       <p class="sub">${learner ? t('acc_sync_desc') : role === 'guardian' ? t('acc_guardian_desc') : t('acc_staff_desc')}</p><button id="logout">${t('btn_logout')}</button></div>
-      ${role === 'admin' ? orgCard() : ''}
+      ${role === 'admin' ? orgCard() + backupCard() : ''}
       <div class="card"><h2>${t('acc_manage')}</h2>
         <div class="row"><input type="password" id="pwcur" placeholder="${t('pw_cur')}" autocomplete="current-password"></div>
         <div class="row"><input type="password" id="pwnew" placeholder="${t('pw_new')}" autocomplete="new-password"><button id="pwchg">${t('btn_change')}</button></div>
@@ -366,7 +367,7 @@ function renderAccount(app) {
         <p class="sub">${t('link_desc')}</p>
         <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>
         <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><label class="row"><input type="checkbox" id="consentrs" ${state.consent.research ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_rs')}</span></label><p class="sub">${t('consent_note')} ${t('consent_rs_note')}</p></div>` : ''}`;
-    bindOrgCard();
+    bindOrgCard(); bindBackupCard();
     $('#logout').onclick = async () => {
       await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
       state.token = null; state.user = null; state.viewAs = null; state.ro = false; store.set('token', null); dirty.clear(); clearLocal(); state.tab = 'home'; render(); // 공용 기기에 학습 데이터가 남지 않도록 로컬 사본을 지운다

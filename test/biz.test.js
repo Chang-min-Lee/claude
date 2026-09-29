@@ -145,3 +145,20 @@ test('확인 필요 안내: 이유 데이터, 낮은 출석률, 보류(snooze)',
   assert.equal((await post(`/api/students/${id}/snooze`, { days: 0 }, S.t1)).snoozeUntil, '');
   assert.equal((await look()).snoozed, false);
 });
+
+test('베타: 의견함(익명 가능·관리자만 읽기), 백업 내려받기, 설정에 beta 표시', async () => {
+  assert.equal((await post('/api/feedback', { text: '' })).status, 400);
+  assert.equal((await post('/api/feedback', { text: '버튼이 안 보여요', kind: 'bug', where: 'home' })).status, 200); // 로그인 전에도 가능
+  await post('/api/feedback', { text: '학생 화면이 좋아요', kind: 'weird-kind', where: 'x'.repeat(100) }, S.t1);
+  assert.equal((await get('/api/feedback', S.t1)).status, 403); assert.equal((await get('/api/feedback')).status, 401);
+  const f = await get('/api/feedback', S.admin); assert.equal(f.feedback.length, 2);
+  assert.equal(f.feedback[0].who, '김강사 (teacher)'); assert.equal(f.feedback[0].kind, 'idea'); assert.equal(f.feedback[0].where.length, 40); assert.equal(f.feedback[1].who, ''); assert.equal(f.feedback[1].kind, 'bug');
+  assert.equal((await api('POST', `/api/feedback/${f.feedback[1].id}/done`, {}, S.admin)).done, true);
+  assert.equal((await get('/api/feedback', S.admin)).feedback.find((x) => x.id === f.feedback[1].id).done, true);
+  assert.equal((await get('/api/settings')).beta, false); // 이 테스트 서버는 BETA 를 켜지 않았다
+  assert.equal((await fetch(base + '/api/backup')).status, 401);
+  assert.equal((await fetch(base + '/api/backup', { headers: { authorization: 'Bearer ' + S.t1 } })).status, 403);
+  const r = await fetch(base + '/api/backup', { headers: { authorization: 'Bearer ' + S.admin } });
+  assert.equal(r.status, 200); assert.match(r.headers.get('content-disposition'), /jinro-backup-\d{4}-\d{2}-\d{2}\.(sqlite|json)/);
+  const buf = Buffer.from(await r.arrayBuffer()); assert.ok(buf.length > 1000);
+});

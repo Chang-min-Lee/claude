@@ -120,9 +120,10 @@ function renderAnalytics(app) {
     <div class="card callout"><h2>🎯 ${t('an_goal_title')}</h2><div class="bar"><i style="width:${Math.min(100, (goal / next) * 100)}%"></i></div>
       <p><b>${t('an_goal_now', { a: goal, b: next })}</b></p><ul><li>${t('an_lv1')}${step >= 1 ? ' ✅' : ''}</li><li>${t('an_lv2')}${step >= 2 ? ' ✅' : ''}</li><li>${t('an_lv3')}${step >= 3 ? ' ✅' : ''}</li></ul><p class="sub">${t('an_caveat')}</p></div>
     <div class="card"><h2>${t('an_tests')}</h2><div class="tscroll"><table class="wplan"><thead><tr><th>${t('an_test')}</th><th>n</th><th>${t('an_avg')}</th><th>${t('an_retake')}</th><th>${t('an_invalid')}</th></tr></thead><tbody>${tid.map((id) => `<tr><td class="subj">${esc(tx(id).name)}</td><td>${d.tests[id].n}</td><td>${d.tests[id].avg ?? '-'}</td><td>${d.tests[id].retake}</td><td>${d.tests[id].invalid}</td></tr>`).join('')}</tbody></table></div></div>
-    <div class="card"><h2>${t('an_records')}</h2><ul><li>${t('an_r_goal', { n: d.withGoal })}</li><li>${t('an_r_grades', { n: d.withGrades })}</li><li>${t('an_r_sessions', { n: d.withSessions, s: d.sessions })}</li><li>${t('an_r_diag', { n: d.withDiag })}</li><li>${t('an_r_retest', { n: d.retest })}</li><li>${t('an_r_att', { n: d.attMarks })}</li><li>${t('an_r_research', { n: d.research })}</li></ul>
+    ${feedbackCard()}<div class="card"><h2>${t('an_records')}</h2><ul><li>${t('an_r_goal', { n: d.withGoal })}</li><li>${t('an_r_grades', { n: d.withGrades })}</li><li>${t('an_r_sessions', { n: d.withSessions, s: d.sessions })}</li><li>${t('an_r_diag', { n: d.withDiag })}</li><li>${t('an_r_retest', { n: d.retest })}</li><li>${t('an_r_att', { n: d.attMarks })}</li><li>${t('an_r_research', { n: d.research })}</li></ul>
       <p class="sub">${t('an_groups')}: ${Object.entries(d.groups).map(([k, v]) => `${k === '-' ? '-' : groupLabel(k)} ${v}`).join(' · ')}</p>
       <div class="row"><button id="anreload">${t('btn_reload')}</button>${roleOf() === 'admin' ? `<button id="anexport">${t('an_export')}</button>` : ''}<span class="sub" id="anmsg"></span></div><p class="sub">${t('an_export_note')}</p></div>`;
+  bindFeedbackCard();
   $('#anreload').onclick = () => { an.data = null; render(); };
   if ($('#anexport')) $('#anexport').onclick = async () => {
     try {

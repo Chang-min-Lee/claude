@@ -3,6 +3,7 @@ services:
   - type: web
     name: jinro-ai
     runtime: docker
+    plan: starter # 영구 디스크를 쓰려면 유료 플랜이 필요해요 (요금은 Render 사이트에서 확인)
     healthCheckPath: /healthz
     disk:
       name: data
@@ -11,6 +12,7 @@ services:
     envVars:
       - { key: DATA_DIR, value: /data }
       - { key: TRUST_PROXY, value: "1" }
+      - { key: BETA, value: "1" } # 베타 안내 배너 + 검색엔진 색인 차단. 정식 오픈 때 지우세요
       - { key: ADMIN_EMAIL, sync: false }
       - { key: ADMIN_PASSWORD, sync: false }
       - { key: ANTHROPIC_API_KEY, sync: false }
