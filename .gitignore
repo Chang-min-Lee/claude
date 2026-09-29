@@ -1,4 +1,5 @@
 node_modules
 .env
+.beta.env
 data
 preview/preview.html
