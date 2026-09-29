@@ -204,16 +204,22 @@ function render() {
 
 // 처음 화면: 무엇을 하는 곳인지 + 로그인/회원가입/활성화 코드/체험 진입
 function renderLanding(app) {
-  const go = (mode) => () => { state.authMode = mode; state.tab = 'account'; render(); };
+  const enter = (entry, mode) => () => {
+    state.entry = entry;
+    if (PREVIEW && mode === 'login') { state.trial = entry === 'learner'; return demoSwitch(entry); } // 미리보기: 로그인 버튼이 곧바로 샘플 화면으로 들어간다
+    state.authMode = mode; state.tab = 'account'; render();
+  };
+  const card = (entry, btns) => `<div class="card entry"><h2>${t('ent_' + entry)}</h2><p class="sub">${t('ent_' + entry + '_d')}</p><div class="actions">${btns}</div></div>`;
   app.innerHTML = `<div class="card landing"><h1>${esc(orgName())}</h1><p class="lead">${t('land_tagline')}</p>
-      <ul class="landlist"><li>🧭 ${t('land_b1')}</li><li>📚 ${t('land_b2')}</li><li>👨‍👩‍👧 ${t('land_b3')}</li></ul>
-      <div class="actions"><button class="primary" id="lg">${t('auth_tab_login')}</button><button class="primary" id="lsg">${t('auth_tab_signup')}</button></div>
-      <p class="sub" style="margin-top:14px">${t('land_claim_q')} <button id="lcl">${t('auth_tab_claim')}</button></p></div>
-    <div class="grid2"><div class="card"><h2>${t('land_l_t')}</h2><p class="sub">${t('land_l_d')}</p></div><div class="card"><h2>${t('land_s_t')}</h2><p class="sub">${t('land_s_d')}</p></div></div>
-    <div class="card"><h2>${t('land_p_t')}</h2><p class="sub">${t('land_p_d')}</p></div>
-    ${PREVIEW ? `<div class="card callout"><h2>👀 ${t('land_preview_t')}</h2><p class="sub">${t('land_preview_hint')}</p></div>` : ''}
-    <div class="card"><h2>${t('land_trial_t')}</h2><p class="sub">${t('land_trial_d')}</p><button id="ltrial">${t('land_trial')}</button></div>`;
-  $('#lg').onclick = go('login'); $('#lsg').onclick = go('signup'); $('#lcl').onclick = go('claim');
+      <ul class="landlist"><li>🧭 ${t('land_b1')}</li><li>📚 ${t('land_b2')}</li><li>👨‍👩‍👧 ${t('land_b3')}</li></ul></div>
+    <div class="grid2">
+      ${card('learner', `<button class="primary" data-en="learner:login">${t('login_as_learner')}</button><button data-en="learner:signup">${t('auth_tab_signup')}</button>`)}
+      ${card('guardian', `<button class="primary" data-en="guardian:login">${t('login_as_guardian')}</button><button data-en="guardian:signup">${t('auth_tab_signup')}</button>`)}
+      ${card('teacher', `<button class="primary" data-en="teacher:login">${t('login_as_teacher')}</button>`)}
+      ${card('admin', `<button class="primary" data-en="admin:login">${t('login_as_admin')}</button>`)}</div>
+    <div class="card"><p class="sub">${t('land_claim_q')} <button data-en="learner:claim">${t('auth_tab_claim')}</button></p>
+      <p class="sub">${t('land_trial_d')} <button id="ltrial">${t('land_trial')}</button></p></div>`;
+  app.querySelectorAll('[data-en]').forEach((b) => { const [e, m] = b.dataset.en.split(':'); b.onclick = enter(e, m); });
   $('#ltrial').onclick = () => { state.trial = true; render(); };
 }
 function renderOnboarding(app) {
@@ -417,14 +423,15 @@ function renderAccount(app) {
     }
     return;
   }
-  const mode = state.authMode || 'login';
-  const tabsHtml = ['login', 'signup', 'claim'].map((k) => `<button data-am="${k}" class="${mode === k || (mode === 'reset' && k === 'login') ? 'on' : ''}">${t('auth_tab_' + k)}</button>`).join('');
+  const entry = state.entry || 'learner', mode = state.authMode || 'login';
+  const allowedTabs = entry === 'learner' ? ['login', 'signup', 'claim'] : entry === 'guardian' ? ['login', 'signup'] : ['login'];
+  const tabsHtml = allowedTabs.map((k) => `<button data-am="${k}" class="${mode === k || (mode === 'reset' && k === 'login') ? 'on' : ''}">${t('auth_tab_' + k)}</button>`).join('');
   const forms = {
-    login: `<div class="card"><h2>${t('login_title')}</h2><input type="text" id="lemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="${t('pw_ph')}" autocomplete="current-password"></div><button class="primary" id="login">${t('btn_login')}</button> <button data-am="reset" class="sub">${t('auth_forgot')}</button><p class="sub">${t('auth_staff_note')}</p></div>`,
+    login: `<div class="card"><h2>${t('login_as_' + entry)}</h2><input type="text" id="lemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="${t('pw_ph')}" autocomplete="current-password"></div><button class="primary" id="login">${t('btn_login')}</button> <button data-am="reset" class="sub">${t('auth_forgot')}</button>${entry === 'teacher' || entry === 'admin' ? `<p class="sub">${t('auth_staff_note')}</p>` : ''}</div>`,
     signup: `<div class="card"><h2>${t('signup_title')}</h2>
       <input type="text" id="sname" maxlength="20" placeholder="${t('name_ph')}"><div class="row"><input type="text" id="semail" placeholder="${t('email_ph')}"></div>
       <div class="row"><input type="password" id="spw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div>
-      <div class="row"><select id="srole"><option value="learner">${t('role_opt_learner')}</option><option value="guardian">${t('role_opt_guardian')}</option></select></div>
+      <input type="hidden" id="srole" value="${entry === 'guardian' ? 'guardian' : 'learner'}">
       <label class="row"><input type="checkbox" id="sagree" style="flex:none;width:20px"> <span class="sub">${t('agree_label')} (<a href="?legal=privacy" target="_blank" rel="noopener">${t('agree_link')}</a>)</span></label>
       <button class="primary" id="signup">${t('btn_signup')}</button>
       <p class="sub">${t('minor_note')}</p></div>`,
@@ -436,7 +443,7 @@ function renderAccount(app) {
       <div class="row"><input type="password" id="rspw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button class="primary" id="rsgo">${t('reset_btn')}</button></div>`,
   };
   app.innerHTML = `${state.profile ? '' : `<button id="back">${t('btn_back')}</button>`}
-    <div class="subnav">${tabsHtml}</div>${forms[mode]}<p class="sub" id="amsg"></p>`;
+    ${allowedTabs.length > 1 ? `<div class="subnav">${tabsHtml}</div>` : ''}${forms[mode]}<p class="sub" id="amsg"></p>`;
   app.querySelectorAll('[data-am]').forEach((b) => (b.onclick = () => { state.authMode = b.dataset.am; render(); }));
   if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; state.trial = false; state.authMode = 'login'; render(); };
   const go = (path, body) => async () => {
@@ -444,7 +451,15 @@ function renderAccount(app) {
     $('#amsg').textContent = t('processing');
     try { await afterAuth(await api(path, { method: 'POST', body: body() })); render(); } catch (e) { $('#amsg').textContent = e.message; }
   };
-  if ($('#login')) $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
+  if ($('#login')) $('#login').onclick = async () => {
+    if (PREVIEW) { $('#amsg').textContent = t('land_preview_no'); return; }
+    $('#amsg').textContent = t('processing');
+    try {
+      const r = await api('/api/login', { method: 'POST', body: { email: $('#lemail').value, password: $('#lpw').value } });
+      if (r.user.role !== entry) { $('#amsg').textContent = t('login_wrong_role', { role: t('role_' + r.user.role), right: t('login_as_' + r.user.role) }); return; } // 다른 입구의 계정
+      await afterAuth(r); render();
+    } catch (e) { $('#amsg').textContent = e.message; }
+  };
   if ($('#signup')) $('#signup').onclick = () => { if (PREVIEW) { $('#amsg').textContent = t('land_preview_no'); return; } if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
   if ($('#claim')) $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
   if ($('#rsgo')) $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));

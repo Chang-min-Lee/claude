@@ -44,6 +44,8 @@ const roleOpts = () => ['landing', 'learner', 'teacher', 'admin', 'guardian'].ma
 render = function () {
   _render();
   const cur = !state.user ? (!state.profile ? 'landing' : 'learner') : state.user.role; roleSel.innerHTML = roleOpts(); roleSel.value = cur; roleSel.title = t('demo_view');
+  const pre = !state.user && !state.profile && !state.trial; // 시작 화면·로그인 화면에서는 미리보기 도구를 숨긴다(실제 서비스와 똑같이 보이도록)
+  demoBar.hidden = pre; if (pre) return;
   const n = document.createElement('div'); n.className = 'preview-note'; n.textContent = t('preview_note'); $('#app').prepend(n);
 };
 const langSel = $('#lang');""")

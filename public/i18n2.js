@@ -320,3 +320,17 @@ Object.assign(UI.vi, {
 });
 Object.assign(UI.ko, { land_preview_t: '미리보기 안내', land_preview_hint: '이 화면은 실제 서비스의 첫 화면이에요. 위쪽 "보기 전환"에서 강사·관리자·보호자 화면을 체험할 수 있어요. 로그인·회원가입 화면은 모양만 볼 수 있고 실제로 가입되지는 않아요.', land_preview_no: '미리보기에서는 실제로 가입·로그인되지 않아요. 위쪽 "보기 전환"으로 체험해 보세요.' });
 Object.assign(UI.vi, { land_preview_t: 'Hướng dẫn xem thử', land_preview_hint: 'Đây là màn hình đầu tiên của dịch vụ thực tế. Ở phần "Chuyển chế độ xem" phía trên bạn có thể trải nghiệm màn hình giáo viên, quản trị viên, phụ huynh. Màn hình đăng nhập/đăng ký chỉ để xem giao diện, không tạo tài khoản thật.', land_preview_no: 'Bản xem thử không đăng ký/đăng nhập thật. Hãy dùng "Chuyển chế độ xem" phía trên.' });
+
+// 입구별 로그인
+Object.assign(UI.ko, {
+  ent_learner: '학생·성인', ent_learner_d: '검사, 목표, 시간표, 학습 기록을 관리해요. 초등학생부터 성인까지 눈높이에 맞게 보여 드려요.', ent_guardian: '학부모·보호자', ent_guardian_d: '자녀의 학습 요약을 확인해요. 선생님이 보낸 링크가 있다면 로그인 없이 바로 볼 수 있어요.',
+  ent_teacher: '강사', ent_teacher_d: '담당 학생의 검사·상담·출결·입퇴실을 관리해요. 계정은 기관 관리자가 만들어 줘요.', ent_admin: '관리자', ent_admin_d: '학생·강사 등록, 기관 정보, 데이터 현황, 백업을 관리해요.',
+  login_as_learner: '학생 로그인', login_as_guardian: '보호자 로그인', login_as_teacher: '강사 로그인', login_as_admin: '관리자 로그인',
+  login_wrong_role: '이 계정은 {role} 계정이에요. 「{right}」 입구로 들어와 주세요.',
+});
+Object.assign(UI.vi, {
+  ent_learner: 'Học viên · Người lớn', ent_learner_d: 'Quản lý bài kiểm tra, mục tiêu, thời khóa biểu, nhật ký học. Nội dung phù hợp từ tiểu học đến người lớn.', ent_guardian: 'Phụ huynh · Người giám hộ', ent_guardian_d: 'Xem tóm tắt học tập của con. Nếu có liên kết giáo viên gửi, bạn xem được ngay không cần đăng nhập.',
+  ent_teacher: 'Giáo viên', ent_teacher_d: 'Quản lý kiểm tra, tư vấn, điểm danh, vào/ra của học viên phụ trách. Tài khoản do quản trị viên đơn vị tạo.', ent_admin: 'Quản trị viên', ent_admin_d: 'Quản lý đăng ký học viên/giáo viên, thông tin đơn vị, tình hình dữ liệu, sao lưu.',
+  login_as_learner: 'Đăng nhập học viên', login_as_guardian: 'Đăng nhập phụ huynh', login_as_teacher: 'Đăng nhập giáo viên', login_as_admin: 'Đăng nhập quản trị viên',
+  login_wrong_role: 'Đây là tài khoản {role}. Vui lòng vào bằng mục 「{right}」.',
+});
