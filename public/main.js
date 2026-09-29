@@ -9,4 +9,9 @@ if ('serviceWorker' in navigator && !PREVIEW && location.protocol.startsWith('ht
 document.addEventListener('visibilitychange', () => { if (!document.hidden) poll(); });
 setInterval(poll, 45000);
 window.addEventListener('pagehide', () => { flush(); });
-(async () => { await bootAuth(); render(); })();
+(async () => {
+  const qs = new URLSearchParams(location.search), pt = qs.get('p'), lg = qs.get('legal');
+  if (lg) { await loadOrg(); return renderLegal(lg); } // 개인정보 처리방침·이용약관
+  if (pt) return renderParentPage(pt); // 학부모 공유 링크
+  await Promise.all([bootAuth(), loadOrg()]); render();
+})();

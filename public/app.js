@@ -25,7 +25,7 @@ const DEFAULTS = {
   profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {},
   consent: { wellbeing: false }, schedule: [], weekplan: [], weekhist: [],
   goal: { type: 'general', label: '', date: '', note: '', milestones: [] },
-  grades: [], checkins: [], closeouts: [], diag: {},
+  grades: [], checkins: [], closeouts: [], diag: {}, diagHist: [],
   messages: [], counsel: [], // 서버가 관리(POST 전용) — 화면에서는 읽기만
 };
 const SERVER_KEYS = ['messages', 'counsel'];
@@ -47,7 +47,8 @@ function saveTarget() { // 저장 대상: 내 계정 / 열어 둔 학생(강사)
 async function flush() {
   const url = saveTarget(), keys = [...dirty];
   if (!url || !keys.length) return;
-  try { await api(url, { method: 'PUT', body: { data: Object.fromEntries(keys.map((k) => [k, state[k]])) } }); keys.forEach((k) => dirty.delete(k)); } catch { /* 다음 저장 때 다시 시도 */ }
+  try { await api(url, { method: 'PUT', body: { data: Object.fromEntries(keys.map((k) => [k, state[k]])) } }); keys.forEach((k) => dirty.delete(k)); setSaveState('ok'); }
+  catch { setSaveState('fail'); clearTimeout(pushTimer); pushTimer = setTimeout(flush, 10000); } // 실패하면 안내를 띄우고 10초 뒤 다시 시도
 }
 function schedulePush() { clearTimeout(pushTimer); pushTimer = setTimeout(flush, 700); }
 const save = (k) => {
@@ -169,7 +170,7 @@ function tabsNow() {
 const RENDERERS = () => ({ home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
-  document.documentElement.lang = lang; document.title = t('title'); $('#title').textContent = t('title');
+  document.documentElement.lang = lang; document.title = orgName(); $('#title').textContent = orgName();
   const role = roleOf(), staffLike = ['guardian', 'teacher', 'admin'].includes(role);
   document.body.classList.toggle('kid', !!state.profile && state.profile.group === 'elementary' && (!staffLike || !!state.viewAs));
   const onboarding = !state.user && !state.profile;
@@ -178,8 +179,9 @@ function render() {
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); scrollTo(0, 0); }));
-  if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
+  if (onboarding) { state.tab === 'account' ? renderAccount(app) : renderOnboarding(app); return app.insertAdjacentHTML('beforeend', legalFooter()); }
   (RENDERERS()[state.tab] || renderHome)(app);
+  app.insertAdjacentHTML('beforeend', legalFooter());
   if (state.viewAs) { // 학생을 열어 본 상태의 안내 줄
     app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}
       ${!state.ro && !state.viewAs.managed && !PREVIEW ? ` <button id="resetcode">🔑 ${t('reset_issue')}</button>` : ''} <span class="sub" id="resetmsg"></span></div>`);
@@ -343,6 +345,7 @@ function renderAccount(app) {
     const role = state.user.role, learner = role === 'learner';
     app.innerHTML = `<div class="card"><h2>${esc(t('acc_hello', { name: state.user.name, role: t('role_' + role) }))}</h2>
       <p class="sub">${learner ? t('acc_sync_desc') : role === 'guardian' ? t('acc_guardian_desc') : t('acc_staff_desc')}</p><button id="logout">${t('btn_logout')}</button></div>
+      ${role === 'admin' ? orgCard() : ''}
       <div class="card"><h2>${t('acc_manage')}</h2>
         <div class="row"><input type="password" id="pwcur" placeholder="${t('pw_cur')}" autocomplete="current-password"></div>
         <div class="row"><input type="password" id="pwnew" placeholder="${t('pw_new')}" autocomplete="new-password"><button id="pwchg">${t('btn_change')}</button></div>
@@ -352,6 +355,7 @@ function renderAccount(app) {
         <p class="sub">${t('link_desc')}</p>
         <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>
         <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><p class="sub">${t('consent_note')}</p></div>` : ''}`;
+    bindOrgCard();
     $('#logout').onclick = async () => {
       await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
       state.token = null; state.user = null; state.viewAs = null; state.ro = false; store.set('token', null); dirty.clear(); clearLocal(); state.tab = 'home'; render(); // 공용 기기에 학습 데이터가 남지 않도록 로컬 사본을 지운다
@@ -392,6 +396,7 @@ function renderAccount(app) {
       <input type="text" id="sname" maxlength="20" placeholder="${t('name_ph')}"><div class="row"><input type="text" id="semail" placeholder="${t('email_ph')}"></div>
       <div class="row"><input type="password" id="spw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div>
       <div class="row"><select id="srole"><option value="learner">${t('role_opt_learner')}</option><option value="guardian">${t('role_opt_guardian')}</option></select></div>
+      <label class="row"><input type="checkbox" id="sagree" style="flex:none;width:20px"> <span class="sub">${t('agree_label')} (<a href="?legal=privacy" target="_blank" rel="noopener">${t('agree_link')}</a>)</span></label>
       <button class="primary" id="signup">${t('btn_signup')}</button>
       <p class="sub">${t('minor_note')}</p></div>
     <div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
@@ -406,7 +411,7 @@ function renderAccount(app) {
     try { await afterAuth(await api(path, { method: 'POST', body: body() })); render(); } catch (e) { $('#amsg').textContent = e.message; }
   };
   $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
-  $('#signup').onclick = go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value }));
+  $('#signup').onclick = () => { if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
   $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
   $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));
 }

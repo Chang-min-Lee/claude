@@ -110,6 +110,7 @@ function demoApi(path, { method = 'GET', body } = {}) {
     return { id, shareCode: code };
   }
   if ((m = p.match(/^\/api\/students\/([\w-]+)$/)) && method === 'DELETE') { delete demo.students[m[1]]; return { ok: true }; }
+  if (p === '/api/settings') { if (method === 'PUT') demo.org = { orgName: body.orgName || '', orgPhone: body.orgPhone || '', orgEmail: body.orgEmail || '' }; return demo.org || { orgName: '스마트어학원 (데모)', orgPhone: '', orgEmail: '' }; }
   if (p === '/api/link' && method === 'POST') { const s = Object.values(demo.students).find((x) => x.shareCode === String(body.code).toUpperCase()); if (!s) demoErr(t('req_failed')); if (demoRole() === 'teacher') s.teacherId = state.user.id; else (demo.guardianLinks = demo.guardianLinks || ['mai']).push(s.id); return { ok: true, name: s.name }; }
   if (p === '/api/unlink') { if (demoRole() === 'guardian') demo.guardianLinks = (demo.guardianLinks || ['mai']).filter((x) => x !== body.id); else if (demo.students[body.id]) demo.students[body.id].teacherId = null; return { ok: true }; }
   if ((m = p.match(/^\/api\/students\/([\w-]+)\/meta$/)) && method === 'PUT') { demo.students[m[1]].teacherId = body.teacherId || null; return { ok: true }; }

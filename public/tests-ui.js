@@ -74,6 +74,7 @@ function finishTests() {
   render(); scrollTo(0, 0);
 }
 
+const tdetail = {}; // AI 상세 해석 캐시(화면을 떠나면 사라짐)
 function renderTestResult(app, id) {
   const test = testById(id), T = tx(id), hist = state.deep[id], cur = hist.at(-1), prev = hist.at(-2);
   const d = describeTest(id, cur);
@@ -86,8 +87,24 @@ function renderTestResult(app, id) {
       <p class="sub">${prev ? t('res_prev', { date: esc(prev.date) }) : t('res_first')}</p><p class="sub">${how}</p></div>
     ${cur.v?.length ? `<div class="card callout warn"><h2>⚠ ${t('valid_title')}</h2><p>${t('valid_body')}</p><ul>${cur.v.map((c) => `<li>${t('valid_' + c)}</li>`).join('')}</ul></div>` : ''}
     ${d.attention ? `<div class="card callout"><h2>💬 ${t('wb_title')}</h2><p>${t('wb_body')}</p><p><b>${t('wb_help')}</b></p><p class="sub">${esc(T.safety)}</p></div>` : ''}
+    ${id !== 'wellbeing' && !PREVIEW ? `<div class="card" id="aidcard"></div>` : ''}
     ${test.sensitive ? `<p class="sub">${t('test_private')}</p>` : ''}
     <div class="card"><button class="primary" data-start="${id}">${t('btn_retest')}</button> <button id="torep">${t('comp_view_report')}</button> <button id="back">${t('btn_to_list')}</button></div>`;
+  if ($('#aidcard')) {
+    const key = `${state.viewAs?.id || 'me'}:${id}:${cur.date}`, box = $('#aidcard');
+    const draw = (msg) => {
+      const dd = tdetail[key], ul = (a) => (a.length ? `<ul>${a.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>` : '');
+      box.innerHTML = `<h2>✨ ${t('aid_title')}</h2>${dd ? `<p>${esc(dd.summary)}</p><h3>${t('aid_strengths')}</h3>${ul(dd.strengths)}<h3>${t('aid_cautions')}</h3>${ul(dd.cautions)}<h3>${t('aid_tips')}</h3>${ul(dd.tips)}` : `<p class="sub">${t('aid_help')}</p>`}
+        ${state.ro ? '' : `<button id="aidgo">${dd ? t('aid_redo') : t('aid_btn')}</button>`} <span class="sub">${esc(msg || '')}</span>`;
+      if ($('#aidgo')) $('#aidgo').onclick = async () => {
+        $('#aidgo').disabled = true; box.querySelector('.sub:last-child').textContent = t('dg_making');
+        try {
+          tdetail[key] = (await api('/api/testdetail', { method: 'POST', body: { group: state.profile.group, name: T.name, headline: d.headline, goal: state.goal.label, cats: test.cats.map((k) => ({ label: testLabel(id, k), value: cur.cat[k] })) } })).detail; draw();
+        } catch (e) { draw(e.message); }
+      };
+    };
+    draw();
+  }
   $('[data-start]').onclick = () => { tv = { mode: 'take', ids: [id], idx: 0, ans: {}, comp: false, resultId: null }; render(); scrollTo(0, 0); };
   $('#torep').onclick = () => { state.tab = 'report'; state.sub.report = 'comp'; render(); scrollTo(0, 0); };
   $('#back').onclick = () => { tv = freshTv(); render(); };

@@ -192,3 +192,11 @@ table.rtbl { width:100%; border-collapse:collapse; font-size:.92em; } table.rtbl
 .jump button { padding: 5px 12px; border-radius: 999px; font-size: .85em; }
 .mtgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin: 10px 0; }
 .mtgrid label { display: flex; flex-direction: column; gap: 3px; }
+
+.savestat { position:fixed; right:16px; bottom:16px; z-index:50; padding:8px 14px; border-radius:999px; font-weight:700; font-size:.88rem; background:var(--ok2); color:var(--ok); box-shadow:var(--shadow); }
+.savestat.fail { background:var(--crit2); color:var(--crit); }
+@media (max-width:860px) { .savestat { bottom:calc(80px + env(safe-area-inset-bottom, 0px)); } }
+button.tile { border:1px solid transparent; text-align:center; font-weight:600; }
+button.tile.on { border-color:var(--gold); background:var(--gold2); }
+.legal h2 { margin-top:1.2em; }
+a { color:var(--main-strong); } a:hover { color:var(--main); }

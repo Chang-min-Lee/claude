@@ -51,7 +51,7 @@ main = rep(main, "langSel.onchange = () => { setLang(langSel.value); render(); a
 report = rd(PUB, 'report.js')
 report = rep(report, 'const ro = state.ro || isGuardianView();', 'const ro = state.ro || isGuardianView() || PREVIEW;')
 report = rep(report, 'const printBtn = () => `', 'const printBtn = () => PREVIEW ? \'\' : `')
-scripts = [i18n, rd(PUB, 'tests.js'), app, rd(PUB, 'plan.js'), rd(PUB, 'tests-ui.js'), rd(PUB, 'quiz.js'), report, rd(PUB, 'staff.js'), rd(PUB, 'extras.js'), rd(PUB, 'input.js'), rd(ROOT, 'preview', 'demo.js'), main]
+scripts = [i18n, rd(PUB, 'tests.js'), app, rd(PUB, 'plan.js'), rd(PUB, 'tests-ui.js'), rd(PUB, 'quiz.js'), report, rd(PUB, 'staff.js'), rd(PUB, 'extras.js'), rd(PUB, 'input.js'), rd(PUB, 'ops.js'), rd(ROOT, 'preview', 'demo.js'), main]
 page = '<title>진로AI 코치</title>\n<style>\n' + css + '\n</style>\n' + body + '\n' + ''.join('<script>\n' + s + '\n</script>\n' for s in scripts)
 out = sys.argv[1] if len(sys.argv) > 1 else os.path.join(ROOT, 'preview', 'preview.html')
 open(out, 'w', encoding='utf-8').write(page)

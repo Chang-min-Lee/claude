@@ -178,3 +178,31 @@ Object.assign(UI.vi, {
   bulk_example: 'Ví dụ', bulk_preview: 'Xem trước', bulk_go: 'Đăng ký hàng loạt', bulk_done: 'Đã đăng ký {n} học viên', bulk_codes: 'Tải CSV mã kích hoạt',
   reg_continue: 'Tiếp tục nhập thông tin', reg_to_list: 'Về danh sách', reg_org: 'Mô hình vận hành',
 });
+
+// 운영(기관 정보·학부모 링크·저장 알림·일괄 메시지·시작 안내·AI 검사 해석·재진단 회차)
+Object.assign(UI.ko, {
+  org_title: '기관 정보', org_help: '기관(학원) 이름과 연락처를 넣으면 화면 제목, 리포트·진단서 머리글, 개인정보 처리방침에 표시돼요.', org_name: '기관 이름 (예: ○○어학원)', org_phone: '대표 전화', org_email: '문의 이메일',
+  pl_title: '학부모 공유 링크', pl_help: '로그인 없이 학부모가 이 학생의 학습 리포트만 읽을 수 있는 링크예요. (정서웰빙·상담일지·메시지는 포함되지 않아요.) 다시 발급하면 이전 링크는 못 써요.',
+  pl_issue: '링크 만들기', pl_reissue: '다시 발급', pl_copy: '링크 복사', pl_copied: '복사했어요.', pl_copy_fail: '복사하지 못했어요. 직접 선택해서 복사해 주세요.', pl_revoke: '링크 끄기',
+  pl_msg: '{name} 학생의 학습 리포트예요: {url}', pl_copy_msg: '안내 문구 복사', pp_bad: '링크를 열 수 없어요', pp_bad_help: '링크가 바뀌었거나 사용이 중지됐어요. 담당 선생님께 새 링크를 요청해 주세요.',
+  save_ok: '저장됨', save_fail: '저장하지 못했어요. 인터넷 연결을 확인해 주세요. 내용은 이 기기에 남아 있고 자동으로 다시 시도해요.',
+  dgr_change: '이전 진단 대비 변화', dgr_pick: '회차 보기 (총 {n}회):', dgr_first: '초기', dgr_n: '제{n}차', dgr_latest: '(최신)',
+  aid_title: 'AI 상세 해석', aid_help: '이 검사 결과를 AI가 더 자세히 풀어 줘요. (기본 해석은 위에 이미 있어요.)', aid_btn: 'AI로 자세히 보기', aid_redo: '다시 해석', aid_strengths: '강점', aid_cautions: '주의할 점', aid_tips: '이렇게 해 보세요',
+  today_title: '오늘 살펴볼 학생', tile_dday: 'D-day 임박',
+  bm_title: '선택한 학생에게 메시지 보내기', bm_help: '위 표에서 체크한 학생 {n}명에게 같은 메시지를 보내요. (공지, 숙제 안내 등)', bm_send: '메시지 보내기', bm_need: '학생을 선택하고 메시지를 입력해 주세요.', bm_done: '{ok}/{n}명에게 보냈어요.',
+  qs_title: '처음 시작하기', qs_help: '아래 순서대로 하면 바로 운영을 시작할 수 있어요.', qs1: '기관 이름·연락처 입력 (계정 탭)', qs2: '강사 계정 만들기 (강사 관리)', qs3: '학생 등록 (한 명씩 또는 일괄)', qs4: '학생 열어서 검사·목표·시간표 입력하고, 학부모 링크 보내기', qs_go: '이동',
+  agree_label: '개인정보 수집·이용에 동의합니다', agree_link: '처리방침 보기', agree_need: '개인정보 수집·이용에 동의해 주세요.',
+});
+Object.assign(UI.vi, {
+  org_title: 'Thông tin đơn vị', org_help: 'Nhập tên và liên hệ của trung tâm để hiển thị ở tiêu đề, phần đầu báo cáo/bản chẩn đoán và chính sách bảo mật.', org_name: 'Tên đơn vị (VD: Trung tâm ○○)', org_phone: 'Điện thoại', org_email: 'Email liên hệ',
+  pl_title: 'Liên kết chia sẻ cho phụ huynh', pl_help: 'Liên kết giúp phụ huynh đọc báo cáo học tập của học viên mà không cần đăng nhập. (Không gồm sức khỏe tinh thần, nhật ký tư vấn, tin nhắn.) Cấp lại thì liên kết cũ sẽ không dùng được.',
+  pl_issue: 'Tạo liên kết', pl_reissue: 'Cấp lại', pl_copy: 'Sao chép liên kết', pl_copied: 'Đã sao chép.', pl_copy_fail: 'Không sao chép được. Hãy chọn và sao chép thủ công.', pl_revoke: 'Tắt liên kết',
+  pl_msg: 'Báo cáo học tập của {name}: {url}', pl_copy_msg: 'Sao chép nội dung thông báo', pp_bad: 'Không mở được liên kết', pp_bad_help: 'Liên kết đã thay đổi hoặc bị tắt. Vui lòng xin giáo viên phụ trách liên kết mới.',
+  save_ok: 'Đã lưu', save_fail: 'Không lưu được. Hãy kiểm tra kết nối mạng. Nội dung vẫn còn trên thiết bị này và sẽ tự thử lại.',
+  dgr_change: 'Thay đổi so với lần chẩn đoán trước', dgr_pick: 'Xem theo lần (tổng {n} lần):', dgr_first: 'Ban đầu', dgr_n: 'Lần {n}', dgr_latest: '(mới nhất)',
+  aid_title: 'Diễn giải chi tiết bằng AI', aid_help: 'AI sẽ diễn giải chi tiết hơn kết quả này. (Diễn giải cơ bản đã có ở trên.)', aid_btn: 'Xem chi tiết bằng AI', aid_redo: 'Diễn giải lại', aid_strengths: 'Điểm mạnh', aid_cautions: 'Điểm cần lưu ý', aid_tips: 'Hãy thử như sau',
+  today_title: 'Học viên cần chú ý hôm nay', tile_dday: 'Sắp đến D-day',
+  bm_title: 'Gửi tin nhắn cho học viên đã chọn', bm_help: 'Gửi cùng một tin nhắn cho {n} học viên đã tích ở bảng trên. (Thông báo, bài tập...)', bm_send: 'Gửi tin nhắn', bm_need: 'Hãy chọn học viên và nhập tin nhắn.', bm_done: 'Đã gửi cho {ok}/{n} học viên.',
+  qs_title: 'Bắt đầu nhanh', qs_help: 'Làm theo thứ tự dưới đây là có thể vận hành ngay.', qs1: 'Nhập tên và liên hệ đơn vị (tab Tài khoản)', qs2: 'Tạo tài khoản giáo viên (Quản lý giáo viên)', qs3: 'Đăng ký học viên (từng người hoặc hàng loạt)', qs4: 'Mở học viên để nhập kiểm tra, mục tiêu, thời khóa biểu và gửi liên kết cho phụ huynh', qs_go: 'Đi tới',
+  agree_label: 'Tôi đồng ý cho thu thập và sử dụng thông tin cá nhân', agree_link: 'Xem chính sách', agree_need: 'Vui lòng đồng ý thu thập và sử dụng thông tin cá nhân.',
+});

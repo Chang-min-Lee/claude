@@ -77,7 +77,7 @@ function testCard(id, opts = {}) {
     ${r.v?.length ? `<p class="sub">⚠ ${t('valid_title')}</p>` : ''}</div>`;
 }
 function letterhead(title, no) {
-  return `<div class="letterhead"><div><div class="org">🧭 ${t('title')}</div><div class="lh-title">${title}</div></div>
+  return `<div class="letterhead"><div><div class="org">🧭 ${esc(orgName())}${state.org?.orgPhone ? ` <span class="sub">· ${esc(state.org.orgPhone)}</span>` : ''}</div><div class="lh-title">${title}</div></div>
     <div class="lh-meta">${t('doc_no')}: <b>${no}</b><br>${t('doc_date')}: <b>${today()}</b><br>${t('doc_name')}: <b>${esc(state.profile.name)}</b> · ${esc(groupLabel(state.profile.group))}</div></div>`;
 }
 const printBtn = () => `<div class="noprint"><button class="primary" id="doprint">🖨 ${t('btn_print')}</button> <span class="sub">${t('print_hint')}</span></div>`;
@@ -150,8 +150,8 @@ function scheduleAnalysis() {
   if (!s.total) return t('dg_time_none');
   return t('dg_time', { total: s.total, days: s.days, wk: s.weekday, we: s.weekend }) + ' ' + (s.total < 5 ? t('dg_time_low') : s.total > 25 ? t('dg_time_high') : t('dg_time_ok'));
 }
-function diagModel() {
-  const d = state.diag && state.diag.date ? state.diag : null, it = interpret(), T = C().tips, hc = hollandCats();
+function diagModel(picked) {
+  const d = picked !== undefined ? picked : (state.diag && state.diag.date ? state.diag : null), it = interpret(), T = C().tips, hc = hollandCats();
   const fb = {}; // fallback (규칙 기반)
   fb.purpose = t('dg_purpose', { g: groupLabel(state.profile.group), goal: state.goal.label || t('dg_goal_none') });
   fb.overall = [...it.interest, ...it.style, ...it.ability, ...it.habit].join(' ');
@@ -172,10 +172,23 @@ function diagModel() {
   return { ai: !!d, date: d ? d.date : today(), dlang: d?.lang, before: d?.before || '', insight: d?.insight || '', intensity: d?.intensityLabel || (intensityOf() ? t('int_' + intensityOf()) : ''), intensityReason: d?.intensityReason || '',
     purpose: pick('purpose'), overall: pick('overall'), subjects: pick('subjects'), timeAnalysis: pick('timeAnalysis'), methods: pick('methods'), career: pick('career'), checklist: pick('checklist'), weekplan: pick('weekplan'), etc: d?.etc || [] };
 }
+const diagRounds = () => [...state.diagHist, ...(state.diag?.date ? [state.diag] : [])];
+// 선택한 회차의 검사 점수를 바로 앞 회차와 비교한 변화 표
+function diagChange(rounds, ri) {
+  const cur = rounds[ri], prev = rounds[ri - 1];
+  if (!prev || !cur?.tests || !prev.tests) return '';
+  const rows = Object.keys(cur.tests).filter((id) => prev.tests[id] !== undefined).map((id) => ({ id, a: prev.tests[id], b: cur.tests[id], d: Math.round((cur.tests[id] - prev.tests[id]) * 10) / 10 }));
+  if (!rows.length) return '';
+  return `<div class="docsec"><h3>${t('dgr_change')} <span class="sub">(${esc(prev.date)} → ${esc(cur.date)})</span></h3><table class="rtbl"><tbody>${rows.map((r) => `<tr><td class="k">${esc(tx(r.id).name)}</td><td>${r.a.toFixed(1)} → ${r.b.toFixed(1)} <b style="color:var(--${r.d >= 0 ? 'ok' : 'crit'})">(${r.d >= 0 ? '+' : ''}${r.d})</b></td></tr>`).join('')}</tbody></table></div>`;
+}
 function diagView(body) {
-  const m = diagModel(), tests = PRINT_TESTS.filter((id) => lastRes(id));
+  const rounds = diagRounds();
+  let ri = state.diagRound ?? rounds.length - 1; if (ri < 0 || ri > rounds.length - 1) ri = rounds.length - 1;
+  const past = rounds.length > 0 && ri < rounds.length - 1;
+  const m = diagModel(rounds.length ? rounds[ri] : null), tests = PRINT_TESTS.filter((id) => lastRes(id));
   const ro = state.ro || isGuardianView();
-  body.innerHTML = `<div class="card noprint"><h2>${t('dg_ai_title')}</h2><p class="sub">${t('dg_ai_desc')}</p>
+  const roundBar = rounds.length > 1 ? `<div class="row noprint"><span class="sub">${t('dgr_pick', { n: rounds.length })}</span>${rounds.map((r, i) => `<button data-round="${i}" class="${i === ri ? 'primary' : ''}">${i === 0 ? t('dgr_first') : t('dgr_n', { n: i })}${i === rounds.length - 1 ? ' ' + t('dgr_latest') : ''}</button>`).join('')}</div>` : '';
+  body.innerHTML = `${roundBar}<div class="card noprint"><h2>${t('dg_ai_title')}</h2><p class="sub">${t('dg_ai_desc')}</p>
       ${ro ? '' : `<button class="primary" id="dgai" ${tests.length ? '' : 'disabled'}>${m.ai ? t('dg_ai_redo') : t('dg_ai_btn')}</button>`} <span class="sub" id="dgmsg">${tests.length ? '' : t('dg_need_tests')}</span>
       ${m.ai && m.dlang && m.dlang !== lang ? `<p class="sub">${t('dg_lang_diff')}</p>` : ''}</div>
     <div class="doc">${letterhead(t('rep_diag_title'), docNo('DG'))}
@@ -184,8 +197,9 @@ function diagView(body) {
         <tr><td class="k">${t('goal_title')}</td><td>${esc(state.goal.label || t('dg_goal_none'))}${state.goal.date ? ` · ${ddayText(ddayOf(state.goal.date))} (${esc(state.goal.date)})` : ''}</td></tr>
         ${m.intensity ? `<tr><td class="k">${t('rep_intensity')}</td><td>${esc(m.intensity)}${m.intensityReason ? ` — ${esc(m.intensityReason)}` : ''}</td></tr>` : ''}</tbody></table></div>
       <div class="docsec"><h3>2. ${t('dg_purpose_h')}</h3><p>${esc(m.purpose)}</p></div>
-      <div class="docsec"><h3>3. ${t('rep_tests')}</h3>${tests.length ? `<table class="rtbl"><tbody>${tests.map((id) => { const d = describeTest(id, lastRes(id)); return `<tr><td class="k">${esc(tx(id).name)}</td><td>${esc(d.headline)}<br>${chips(d.tags)}</td></tr>`; }).join('')}</tbody></table>` : `<p class="sub">${t('dg_need_tests')}</p>`}
+      <div class="docsec"><h3>3. ${t('rep_tests')}</h3>${past ? `<table class="rtbl"><tbody>${Object.entries(rounds[ri].tests || {}).map(([id, v]) => `<tr><td class="k">${esc(tx(id).name)}</td><td>${v.toFixed(1)} / 5</td></tr>`).join('')}</tbody></table>` : tests.length ? `<table class="rtbl"><tbody>${tests.map((id) => { const d = describeTest(id, lastRes(id)); return `<tr><td class="k">${esc(tx(id).name)}</td><td>${esc(d.headline)}<br>${chips(d.tags)}</td></tr>`; }).join('')}</tbody></table>` : `<p class="sub">${t('dg_need_tests')}</p>`}
         ${m.before ? `<p>${esc(m.before)}</p>` : ''}</div>
+      ${diagChange(rounds, ri)}
       ${m.overall ? `<div class="docsec"><h3>4. ${t('dg_overall')}</h3><p>${esc(m.overall)}</p>${m.insight ? `<p class="sub">${esc(m.insight)}</p>` : ''}</div>` : ''}
       ${m.subjects.length ? `<div class="docsec"><h3>5. ${t('dg_subjects')}</h3><table class="rtbl"><tbody>${m.subjects.map(([a, b]) => `<tr><td class="k">${esc(a)}</td><td>${esc(b)}</td></tr>`).join('')}</tbody></table></div>` : ''}
       <div class="docsec"><h3>6. ${t('dg_time_h')}</h3><p>${esc(m.timeAnalysis)}</p></div>
@@ -194,6 +208,7 @@ function diagView(body) {
       <div class="docsec"><h3>9. ${t('dg_week')}</h3><ul>${m.checklist.map((x) => `<li>${esc(x)}</li>`).join('')}</ul>
         ${m.weekplan.length ? `<table class="rtbl"><tbody>${m.weekplan.map((r) => `<tr><td class="k">${esc(r.subject)}</td><td>${t('kind_' + r.kind)} · ${esc(r.detail)}</td></tr>`).join('')}</tbody></table>` : ''}</div>
       <div class="docfoot"><div class="sign"><div>${t('dg_sign_learner')}<span></span></div><div>${t('dg_sign_teacher')}<span></span></div></div><p class="sub">${t('rep_disclaimer')} ${m.ai ? t('dg_ai_note') : t('dg_rule_note')}</p></div></div>${printBtn()}`;
+  body.querySelectorAll('[data-round]').forEach((b) => (b.onclick = () => { state.diagRound = +b.dataset.round; render(); }));
   const b = $('#dgai');
   if (b) b.onclick = async () => {
     b.disabled = true; $('#dgmsg').textContent = t('dg_making');
@@ -206,7 +221,14 @@ async function aiDiagnosis() { // 검사 결과·성적·시간표를 서버 AI 
     tests: tests.map((id) => ({ name: tx(id).name, headline: describeTest(id, lastRes(id)).headline, cats: testById(id).cats.map((k) => ({ label: testLabel(id, k), value: lastRes(id).cat[k] })) })),
     grades: state.grades.slice(-12).map((g) => ({ subject: g.subject, score: g.score })), schedule: { hours: scheduleStats().total }, tasksDone: taskStats().done, tasksTotal: taskStats().total };
   const res = await api('/api/diagnosis', { method: 'POST', body });
-  state.diag = res.diag; save('diag');
+  setDiag(res.diag);
+}
+// 새 진단서를 저장한다. 다른 날짜의 이전 진단서는 회차 기록(diagHist)으로 보관해 재진단 때 변화를 비교한다.
+function setDiag(d) {
+  const old = state.diag;
+  if (old && old.date && old.date !== d.date) { state.diagHist = [...state.diagHist, old].slice(-9); save('diagHist'); }
+  d.tests = Object.fromEntries(PRINT_TESTS.filter((id) => lastRes(id)).map((id) => [id, lastRes(id).overall]));
+  state.diag = d; state.diagRound = undefined; save('diag');
 }
 
 // ----- 강사용 -----

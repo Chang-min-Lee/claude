@@ -6,8 +6,8 @@ async function openStudent(id, tab) {
   try {
     const r = await api('/api/students/' + id);
     loadData(r.data);
-    state.viewAs = { id, name: r.user.name, teacher: r.teacher, managed: r.user.managed, shareCode: r.user.shareCode };
-    state.ro = !r.canWrite;
+    state.viewAs = { id, name: r.user.name, teacher: r.teacher, managed: r.user.managed, shareCode: r.user.shareCode, parentToken: r.user.parentToken };
+    state.ro = !r.canWrite; state.diagRound = undefined;
     if (!state.profile) state.profile = newProfile(r.user.name);
     state.profile.services = state.profile.services || { study: true, career: true };
     state.tab = state.ro ? 'report' : (tab || 'home'); state.sub = { plan: 'schedule', report: state.ro ? 'parent' : 'comp' }; tv = freshTv();
@@ -26,7 +26,7 @@ const sum = (a) => a.reduce((x, y) => x + y, 0);
 const ddayCell = (l) => (l.goal.dday === null ? '' : ` <span class="tag">${ddayText(l.goal.dday)}</span>`);
 
 // ---------- 학생 목록 (강사/관리자) ----------
-const roster = { learners: [], teachers: [], loaded: false, loading: false, q: '', teacher: '', watch: false, sel: new Set(), err: '', summary: '', msg: '' };
+const roster = { learners: [], teachers: [], loaded: false, loading: false, q: '', teacher: '', watch: false, flag: '', bulkMsg: '', bulkNote: '', sel: new Set(), err: '', summary: '', msg: '' };
 async function loadRoster() {
   roster.loading = true;
   try { const r = await api('/api/dashboard?today=' + today()); roster.learners = r.learners; roster.teachers = r.teachers || []; roster.err = ''; } catch (e) { roster.err = e.message; }
@@ -38,12 +38,23 @@ function weeklySummary(list) {
   const avgMin = n ? Math.round(sum(list.map((l) => sum(l.week))) / n) : 0, avgCi = n ? (sum(list.map((l) => l.checkinsWeek)) / n).toFixed(1) : '0';
   return [t('ws_head', { date: today(), n, ok: n - w.length, w: w.length }), t('ws_avg', { min: avgMin, ci: avgCi }), w.length ? t('ws_watch', { names: w.map((l) => l.name).join(', ') }) : ''].filter(Boolean).join('\n');
 }
+// 처음 시작하는 관리자를 위한 안내
+function quickStart() {
+  const steps = [['qs1', 'account', !!state.org?.orgName], ['qs2', 'staff', false], ['qs3', 'register', false], ['qs4', 'register', false]];
+  return `<div class="card callout"><h2>🚀 ${t('qs_title')}</h2><p class="sub">${t('qs_help')}</p>${steps.map(([k, tab, done], i) => `<div class="task ${done ? 'done' : ''}"><span><b>${i + 1}.</b> ${t(k)}</span><button data-qs="${tab}">${t('qs_go')}</button></div>`).join('')}</div>`;
+}
+const flagPass = (l) => !roster.flag || (roster.flag === 'msg' ? !!l.awaiting : roster.flag === 'dday' ? l.flags.ddaySoon : roster.flag === 'idle' ? l.flags.idle : true);
+// 오늘 살펴볼 것: 클릭하면 해당 학생만 걸러서 본다
+function todayTiles() {
+  const L = roster.learners, n = { watch: L.filter((l) => l.status === 'watch').length, msg: L.filter((l) => l.awaiting).length, dday: L.filter((l) => l.flags.ddaySoon).length, idle: L.filter((l) => l.flags.idle).length };
+  return `<div class="tiles" style="grid-template-columns:repeat(4,1fr)">${[['watch', 'st_watch'], ['msg', 'flag_msg'], ['dday', 'tile_dday'], ['idle', 'flag_idle']].map(([k, lb]) => `<button class="tile ${roster.flag === k || (k === 'watch' && roster.watch) ? 'on' : ''}" data-flag="${k}"><b>${n[k]}</b>${t(lb)}</button>`).join('')}</div>`;
+}
 function renderRoster(app) {
   if (!roster.loaded && !roster.loading) loadRoster();
   const admin = roleOf() === 'admin', q = roster.q.trim().toLowerCase();
-  const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch'));
+  const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l));
   const watchN = roster.learners.filter((l) => l.status === 'watch').length;
-  app.innerHTML = `<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
+  app.innerHTML = `${roster.learners.length ? `<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
       <div class="row"><input type="text" id="rq" placeholder="${t('roster_search')}" value="${esc(roster.q)}">
         ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
       <label class="row"><input type="checkbox" id="rw" ${roster.watch ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('roster_watch_only')} <span class="sub">(${watchN})</span></span></label>
@@ -56,10 +67,20 @@ function renderRoster(app) {
         <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}</span>${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
         <td class="detail">${esc(l.goal.label)}${ddayCell(l)}</td><td>${unit('unit_day', l.streak)}</td><td>${unit('unit_min', sum(l.week))}</td><td>${l.doneCount}/${l.doneCount + l.openCount}</td><td>${l.checkinsWeek}</td>
         <td><span class="pill ${l.status}">${t('st_' + l.status)}</span></td>${admin ? `<td>${l.teacher ? esc(l.teacher.name) : `<span class="sub">${t('unassigned')}</span>`}</td>` : ''}
-        <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}`;
+        <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}
+    ${roster.learners.length ? `<div class="card"><h2>${t('bm_title')}</h2><p class="sub">${t('bm_help', { n: roster.sel.size })}</p><textarea id="bmtext" rows="2" maxlength="500" placeholder="${t('msg_ph')}">${esc(roster.bulkMsg)}</textarea><button class="primary" id="bmsend">${t('bm_send')}</button> <span class="sub" id="bmnote">${esc(roster.bulkNote)}</span></div>` : ''}`;
   $('#rq').oninput = (e) => { roster.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('#rq'); el.focus(); el.setSelectionRange(pos, pos); };
   if ($('#rt')) $('#rt').onchange = (e) => { roster.teacher = e.target.value; render(); };
   $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
+  app.querySelectorAll('[data-qs]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.qs; render(); }));
+  app.querySelectorAll('[data-flag]').forEach((b) => (b.onclick = () => { if (b.dataset.flag === 'watch') { roster.watch = !roster.watch; } else roster.flag = roster.flag === b.dataset.flag ? '' : b.dataset.flag; render(); }));
+  if ($('#bmsend')) $('#bmsend').onclick = async () => {
+    const text = $('#bmtext').value.trim(), ids = [...roster.sel]; roster.bulkMsg = text;
+    if (!text || !ids.length) { $('#bmnote').textContent = t('bm_need'); return; }
+    $('#bmsend').disabled = true; let ok = 0;
+    for (const id of ids) { try { await api(`/api/students/${id}/messages`, { method: 'POST', body: { text } }); ok++; } catch { /* 계속 */ } }
+    roster.bulkNote = t('bm_done', { ok, n: ids.length }); if (ok === ids.length) roster.bulkMsg = ''; render();
+  };
   $('#rreload').onclick = () => { roster.loaded = false; render(); };
   $('#rcsv').onclick = () => downloadCsv(`students-${today()}.csv`, [[t('csv_name'), t('csv_group'), t('csv_teacher'), t('csv_goal'), t('csv_dday'), t('csv_streak'), t('csv_week'), t('csv_done'), t('csv_total'), t('csv_checkin'), t('csv_status'), t('csv_reasons')],
     ...list.map((l) => [l.name, l.group ? groupLabel(l.group) : '', l.teacher?.name || '', l.goal.label, l.goal.dday ?? '', l.streak, sum(l.week), l.doneCount, l.doneCount + l.openCount, l.checkinsWeek, t('st_' + l.status), flagReasons(l).join(' / ')])]);

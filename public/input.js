@@ -34,7 +34,8 @@ function basicCard(el) {
     <p class="sub">${t('ta_note_help')}</p><textarea id="btnote" rows="2" maxlength="300" placeholder="${t('ta_note')}">${esc(p.teacherNote)}</textarea>
     ${admin ? `<div class="row"><span class="sub">${t('in_teacher')}</span><select id="bteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${v.teacher?.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>` : ''}
     ${v.managed ? `<p>${t('in_code')}: <b style="font-size:1.2em;letter-spacing:2px">${esc(v.shareCode || '')}</b></p><p class="sub">${t('reg_code_help')}</p>` : `<p class="sub">${t('in_has_account')}</p>`}
-    <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>`;
+    <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
+  bindParentLinkCard();
   const upd = () => {
     p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value;
     p.services = { study: $('#bs1').checked, career: $('#bs2').checked }; p.note = $('#bnote').value.trim(); p.teacherNote = $('#btnote').value.trim();
@@ -97,14 +98,13 @@ function diagCard(el) {
     <label class="sub">${t('dgi_checklist')}<textarea id="d_check" rows="3" placeholder="${t('dgi_checklist_ph')}">${esc((d.checklist || []).join('\n'))}</textarea></label>
     <div class="row"><button class="primary" id="dgisave">${t('btn_save')}</button><button id="dgiview">${t('dgi_view')}</button><span class="sub" id="dgismsg"></span></div></div>`;
   $('#dgisave').onclick = () => {
-    state.diag = {
+    setDiag({
       date: today(), lang, before: $('#d_before').value.trim(), insight: $('#d_insight').value.trim(), intensityLabel: $('#d_il').value.trim(), intensityReason: $('#d_ir').value.trim(),
       purpose: $('#d_purpose').value.trim(), overall: $('#d_overall').value.trim(), timeAnalysis: $('#d_time').value.trim(), career: $('#d_career').value.trim(),
       subjects: lines($('#d_subj').value).map(splitPair).slice(0, 8), etc: d.etc || [], weekplan: d.weekplan || [],
       methods: lines($('#d_meth').value).map((l) => { const [a, b] = splitPair(l); return [a, b.split('|').map((x) => x.trim()).filter(Boolean).slice(0, 5)]; }).slice(0, 6),
       checklist: lines($('#d_check').value).slice(0, 6),
-    };
-    save('diag'); $('#dgismsg').textContent = t('saved');
+    }); $('#dgismsg').textContent = t('saved');
   };
   $('#dgiview').onclick = () => { state.tab = 'report'; state.sub.report = 'diag'; render(); scrollTo(0, 0); };
   if ($('#dgifill')) $('#dgifill').onclick = async () => { $('#dgifill').disabled = true; $('#dgimsg').textContent = t('dg_making'); try { await aiDiagnosis(); render(); } catch (e) { $('#dgimsg').textContent = e.message; $('#dgifill').disabled = false; } };

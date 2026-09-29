@@ -49,6 +49,7 @@ const M = {
     badEmail: '올바른 이메일을 입력해 주세요.', pwShort: '비밀번호는 8자 이상이어야 해요.', nameReq: '이름을 입력해 주세요.', emailTaken: '이미 가입된 이메일이에요.', badCred: '이메일 또는 비밀번호가 맞지 않아요.',
     learnerOnly: '학습자 계정만 저장할 수 있어요.', guardianOnlyLink: '보호자/교사 계정만 연결할 수 있어요.', codeNotFound: '연결 코드를 찾을 수 없어요.', guardianOnly: '보호자/교사 전용이에요.',
     curPwBad: '현재 비밀번호가 맞지 않아요.', newPwShort: '새 비밀번호는 8자 이상이어야 해요.', pwBad: '비밀번호가 맞지 않아요.', msgReq: '메시지가 필요합니다.', serverErr: '서버 오류가 발생했어요.',
+    detailNeedKey: 'AI 상세 해석은 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (위의 기본 해석은 키 없이도 볼 수 있어요.)',
     diagNeedKey: 'AI 진단서는 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (아래의 기본 해석은 키 없이도 볼 수 있어요.)', forbidden: '접근 권한이 없어요.', notFound: '찾을 수 없어요.', staffOnly: '강사/관리자 전용이에요.', adminOnly: '관리자 전용이에요.',
     lastAdmin: '마지막 남은 관리자 계정은 변경하거나 삭제할 수 없어요.', roleBad: '역할이 올바르지 않아요.', notManaged: '강사가 등록한 학생만 활성화할 수 있어요.', dataTooBig: '저장할 데이터가 너무 커요.', selfDelete: '내 계정은 여기서 삭제할 수 없어요. 계정 탭을 이용해 주세요.',
     resetBad: '재설정 코드가 올바르지 않거나 만료됐어요.', noReset: '이메일 계정이 있는 사용자만 재설정 코드를 발급할 수 있어요.',
@@ -63,6 +64,7 @@ const M = {
     badEmail: 'Vui lòng nhập email hợp lệ.', pwShort: 'Mật khẩu phải có ít nhất 8 ký tự.', nameReq: 'Vui lòng nhập tên.', emailTaken: 'Email này đã được đăng ký.', badCred: 'Email hoặc mật khẩu không đúng.',
     learnerOnly: 'Chỉ tài khoản người học mới có thể lưu dữ liệu.', guardianOnlyLink: 'Chỉ tài khoản phụ huynh/giáo viên mới có thể kết nối.', codeNotFound: 'Không tìm thấy mã kết nối.', guardianOnly: 'Chỉ dành cho phụ huynh/giáo viên.',
     curPwBad: 'Mật khẩu hiện tại không đúng.', newPwShort: 'Mật khẩu mới phải có ít nhất 8 ký tự.', pwBad: 'Mật khẩu không đúng.', msgReq: 'Cần có tin nhắn.', serverErr: 'Đã xảy ra lỗi máy chủ.',
+    detailNeedKey: 'Phần diễn giải AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản ở trên vẫn xem được.)',
     diagNeedKey: 'Bản chẩn đoán AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản bên dưới vẫn xem được khi không có khóa.)', forbidden: 'Bạn không có quyền truy cập.', notFound: 'Không tìm thấy.', staffOnly: 'Chỉ dành cho giáo viên/quản trị viên.', adminOnly: 'Chỉ dành cho quản trị viên.',
     lastAdmin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', roleBad: 'Vai trò không hợp lệ.', notManaged: 'Chỉ học viên do giáo viên đăng ký mới có thể kích hoạt.', dataTooBig: 'Dữ liệu cần lưu quá lớn.', selfDelete: 'Không thể xóa tài khoản của chính bạn ở đây. Hãy dùng tab Tài khoản.',
     resetBad: 'Mã đặt lại không đúng hoặc đã hết hạn.', noReset: 'Chỉ có thể cấp mã đặt lại cho người dùng đã có tài khoản email.',
@@ -329,8 +331,29 @@ function storeData(learner, clean) {
 // ---------- 라우터 ----------
 const TRUST_PROXY = process.env.TRUST_PROXY === '1';
 const ip = (req) => (TRUST_PROXY && String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || req.socket.remoteAddress || '';
+// 기관(학원) 설정: 이름·연락처. 로그인 화면과 문서 머리글에 쓰인다.
+const orgSettings = () => ({ orgName: '', orgPhone: '', orgEmail: '', ...(db.kv?.org || {}) });
 const routes = {
   'GET /healthz': async () => ({ ok: true, storage: store.kind }),
+  'GET /api/settings': async () => orgSettings(),
+  'PUT /api/settings': async (req) => {
+    const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden');
+    const b = await readBody(req);
+    db.kv = db.kv || {}; db.kv.org = { orgName: str(b.orgName, 40), orgPhone: str(b.orgPhone, 30), orgEmail: str(b.orgEmail, 80) };
+    store.saveKv('org', db.kv.org);
+    return orgSettings();
+  },
+  // 학부모 공유 링크: 로그인 없이 읽기 전용 리포트만 본다 (정서웰빙·채팅·상담일지·메시지는 절대 포함하지 않음)
+  'GET /api/parent': async (req, url) => {
+    limit('parent:' + ip(req), 60, 10 * 60000);
+    const tok = url.searchParams.get('t') || '';
+    const l = tok.length >= 20 && Object.values(db.users).find((x) => x.role === 'learner' && x.parentToken === tok);
+    if (!l) throw new HttpError(404, 'notFound');
+    const d = { ...(l.data || {}) }; delete d.chat; delete d.counsel; delete d.messages;
+    if (d.deep) { d.deep = { ...d.deep }; delete d.deep.wellbeing; }
+    const t = teacherOf(l.id);
+    return { name: l.name, data: d, teacher: t ? t.name : '', org: orgSettings() };
+  },
   'POST /api/signup': async (req) => {
     limit('auth:' + ip(req), 20, 15 * 60000);
     const b = await readBody(req);
@@ -341,7 +364,7 @@ const routes = {
     if (userByEmail(email)) throw new HttpError(409, 'emailTaken');
     const role = b.role === 'guardian' ? 'guardian' : 'learner';
     const salt = crypto.randomBytes(16).toString('hex');
-    const u = newUser({ email, name, role, salt, hash: hashPw(password, salt) });
+    const u = newUser({ email, name, role, salt, hash: hashPw(password, salt), ...(b.agree === true ? { agreedAt: Date.now() } : {}) });
     db.users[u.id] = u;
     return { token: issueToken(u.id), user: publicUser(u) };
   },
@@ -504,6 +527,7 @@ const routes = {
     return { accounts: Object.values(db.users).filter((x) => x.email && (x.email.includes(q) || String(x.name).toLowerCase().includes(q))).slice(0, 20).map((x) => ({ id: x.id, name: x.name, email: x.email, role: x.role })) };
   },
   'POST /api/schedule': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeSchedule(await readBody(req), langOf(req)); },
+  'POST /api/testdetail': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeTestDetail(await readBody(req), langOf(req)); },
   'POST /api/diagnosis': async (req) => { limit('ai:' + ip(req), 20, 10 * 60000); return aiMod.makeDiagnosis(await readBody(req), langOf(req)); },
   'POST /api/plan': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makePlan(await readBody(req), langOf(req)); },
   'POST /api/quiz': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makeQuiz(await readBody(req), langOf(req)); },
@@ -514,7 +538,7 @@ const paramRoutes = [
   ['POST', /^\/api\/students\/([\w-]+)\/messages$/, async (req, url, [id]) => { // 학습자 본인 ↔ 담당 강사/관리자 (보호자는 불가)
     const u = needUser(req), l = learnerOr404(u, id, true);
     if (!(u.id === l.id || isStaff(u))) throw new HttpError(403, 'forbidden');
-    limit('msg:' + u.id, 30, 10 * 60000);
+    limit('msg:' + u.id, isStaff(u) ? 300 : 30, 10 * 60000);
     const text = clipStr((await readBody(req)).text, 500);
     if (!text) throw new HttpError(400, 'msgEmpty');
     const msgs = [...(l.data?.messages || []), { id: crypto.randomUUID(), at: new Date().toISOString(), from: u.id === l.id ? 'learner' : 'staff', name: u.name, text }].slice(-200);
@@ -548,7 +572,7 @@ const paramRoutes = [
   ['GET', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
     const u = needUser(req), l = learnerOr404(u, id);
     const t = teacherOf(l.id);
-    return { user: { id: l.id, name: l.name, managed: !l.email, shareCode: isStaff(u) ? l.shareCode : undefined }, data: dataFor(u, l), teacher: t ? { id: t.id, name: t.name } : null, canWrite: canWrite(u, l) };
+    return { user: { id: l.id, name: l.name, managed: !l.email, shareCode: isStaff(u) ? l.shareCode : undefined, parentToken: isStaff(u) ? l.parentToken : undefined }, data: dataFor(u, l), teacher: t ? { id: t.id, name: t.name } : null, canWrite: canWrite(u, l) };
   }],
   ['PUT', /^\/api\/students\/([\w-]+)\/data$/, async (req, url, [id]) => {
     const u = needUser(req);
@@ -573,6 +597,19 @@ const paramRoutes = [
     if (b.teacherId === '') unassignTeacher(l.id);
     else if (t && t.role === 'teacher') assignTeacher(l.id, t.id);
     else throw new HttpError(400, 'roleBad');
+    return { ok: true };
+  }],
+  ['POST', /^\/api\/students\/([\w-]+)\/parent-link$/, async (req, url, [id]) => { // 강사·관리자: 학부모 공유 링크 발급(재발급 시 이전 링크는 무효)
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true);
+    const token = crypto.randomBytes(24).toString('hex');
+    l.parentToken = token; persist(l);
+    return { token };
+  }],
+  ['DELETE', /^\/api\/students\/([\w-]+)\/parent-link$/, async (req, url, [id]) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true);
+    delete l.parentToken; persist(l);
     return { ok: true };
   }],
   ['DELETE', /^\/api\/students\/([\w-]+)$/, async (req, url, [id]) => {
