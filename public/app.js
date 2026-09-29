@@ -188,7 +188,7 @@ function render() {
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
-  if (onboarding) { state.tab === 'account' ? renderAccount(app) : (state.trial || PREVIEW) ? renderOnboarding(app) : renderLanding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
+  if (onboarding) { state.tab === 'account' ? renderAccount(app) : state.trial ? renderOnboarding(app) : renderLanding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());
   app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); };
@@ -211,6 +211,7 @@ function renderLanding(app) {
       <p class="sub" style="margin-top:14px">${t('land_claim_q')} <button id="lcl">${t('auth_tab_claim')}</button></p></div>
     <div class="grid2"><div class="card"><h2>${t('land_l_t')}</h2><p class="sub">${t('land_l_d')}</p></div><div class="card"><h2>${t('land_s_t')}</h2><p class="sub">${t('land_s_d')}</p></div></div>
     <div class="card"><h2>${t('land_p_t')}</h2><p class="sub">${t('land_p_d')}</p></div>
+    ${PREVIEW ? `<div class="card callout"><h2>👀 ${t('land_preview_t')}</h2><p class="sub">${t('land_preview_hint')}</p></div>` : ''}
     <div class="card"><h2>${t('land_trial_t')}</h2><p class="sub">${t('land_trial_d')}</p><button id="ltrial">${t('land_trial')}</button></div>`;
   $('#lg').onclick = go('login'); $('#lsg').onclick = go('signup'); $('#lcl').onclick = go('claim');
   $('#ltrial').onclick = () => { state.trial = true; render(); };
@@ -439,11 +440,12 @@ function renderAccount(app) {
   app.querySelectorAll('[data-am]').forEach((b) => (b.onclick = () => { state.authMode = b.dataset.am; render(); }));
   if ($('#back')) $('#back').onclick = () => { state.tab = 'home'; state.trial = false; state.authMode = 'login'; render(); };
   const go = (path, body) => async () => {
+    if (PREVIEW) { $('#amsg').textContent = t('land_preview_no'); return; } // 미리보기에서는 실제로 가입·로그인되지 않는다
     $('#amsg').textContent = t('processing');
     try { await afterAuth(await api(path, { method: 'POST', body: body() })); render(); } catch (e) { $('#amsg').textContent = e.message; }
   };
   if ($('#login')) $('#login').onclick = go('/api/login', () => ({ email: $('#lemail').value, password: $('#lpw').value }));
-  if ($('#signup')) $('#signup').onclick = () => { if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
+  if ($('#signup')) $('#signup').onclick = () => { if (PREVIEW) { $('#amsg').textContent = t('land_preview_no'); return; } if (!$('#sagree').checked) { $('#amsg').textContent = t('agree_need'); return; } return go('/api/signup', () => ({ name: $('#sname').value, email: $('#semail').value, password: $('#spw').value, role: $('#srole').value, agree: true }))(); };
   if ($('#claim')) $('#claim').onclick = go('/api/claim', () => ({ code: $('#ccode').value, email: $('#cemail').value, password: $('#cpw').value }));
   if ($('#rsgo')) $('#rsgo').onclick = go('/api/reset', () => ({ email: $('#rsemail').value, code: $('#rscode').value, password: $('#rspw').value }));
   app.querySelectorAll('input').forEach((el) => el.addEventListener('keydown', (e) => { if (e.key === 'Enter') { const b = app.querySelector('.card .primary'); if (b) b.click(); } })); // Enter 로 제출
