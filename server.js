@@ -307,7 +307,10 @@ function summarize(u, todayStr, viewer) {
   // 정서웰빙 '주의' 표시는 본인 동의가 있을 때 강사/관리자에게만 (보호자에게는 항상 숨김)
   const wellbeing = !!(viewer && isStaff(viewer) && d.consent?.wellbeing && wb && wb.overall < 3.0);
   const ddaySoon = dday !== null && dday >= 0 && dday <= 14;
-  const flags = { idle, validity, wellbeing, ddaySoon };
+  const attKeys30 = Object.entries(d.attendance || {}).filter(([k]) => k >= dayKey((() => { const f = new Date(base); f.setDate(f.getDate() - 29); return f; })()) && k <= todayStr).map(([, v]) => v);
+  const lowAtt = attKeys30.length >= 4 && attKeys30.filter((v) => v === 'p' || v === 'l').length / attKeys30.length < 0.7; // 최근 30일 출석률 70% 미만(기록 4건 이상)
+  const flags = { idle, validity, wellbeing, ddaySoon, lowAtt };
+  const snoozed = !!(d.profile?.snoozeUntil && d.profile.snoozeUntil >= todayStr); // 강사가 "확인했어요"로 잠시 보류한 상태
   const t = teacherOf(u.id);
   const att = d.attendance || {}, from45 = new Date(base); from45.setDate(from45.getDate() - 44), from30 = new Date(base); from30.setDate(from30.getDate() - 29);
   const attRecent = Object.fromEntries(Object.entries(att).filter(([k]) => k >= dayKey(from45) && k <= todayStr));
@@ -320,7 +323,9 @@ function summarize(u, todayStr, viewer) {
     teacher: t ? { id: t.id, name: t.name } : null, lastActive, checkinsWeek, goal: { type: goal.type || 'general', label: goal.label || '', dday },
     intensity: sdl === undefined ? null : sdl >= 3.8 ? 'loose' : sdl >= 3.0 ? 'normal' : 'tight',
     awaiting: !!(viewer && isStaff(viewer) && d.messages?.at(-1)?.from === 'learner'),
-    flags, status: idle || validity || wellbeing ? 'watch' : 'ok',
+    flags, snoozed, snoozeUntil: d.profile?.snoozeUntil || '', idleDays: lastActive ? daysBetween(lastActive, todayStr) : (u.createdAt ? Math.floor((Date.now() - u.createdAt) / 86400000) : null),
+    validityTests: Object.entries(deep).filter(([, r]) => r.v?.length).map(([id]) => id),
+    status: !snoozed && (idle || validity || wellbeing || lowAtt) ? 'watch' : 'ok',
     inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', passEnd: d.profile?.passEnd || '', todayMin: (d.log || {})[todayStr] || 0,
     className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
   };
@@ -615,6 +620,14 @@ const routes = {
 
 // ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
 const paramRoutes = [
+  // 개입 안내 보류: 강사가 "확인했어요"를 누르면 며칠간 '확인 필요'에서 뺀다 (days 0 이면 해제)
+  ['POST', /^\/api\/students\/([\w-]+)\/snooze$/, async (req, url, [id]) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true), b = await readBody(req), days = intIn(b.days, 0, 14, 3);
+    const until = days ? dayKey(new Date(Date.now() + days * 86400000)) : '';
+    storeData(l, { profile: sanitizers.profile({ ...(l.data?.profile || { name: l.name }), snoozeUntil: until }) });
+    return { snoozeUntil: until };
+  }],
   ['POST', /^\/api\/students\/([\w-]+)\/messages$/, async (req, url, [id]) => { // 학습자 본인 ↔ 담당 강사/관리자 (보호자는 불가)
     const u = needUser(req), l = learnerOr404(u, id, true);
     if (!(u.id === l.id || isStaff(u))) throw new HttpError(403, 'forbidden');

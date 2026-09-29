@@ -264,3 +264,29 @@ Object.assign(UI.vi, {
   cafe_pass_left: 'Còn {n} ngày', cafe_pass_expired: 'Đã hết hạn', cafe_pass_soon: 'Gói sắp hết hạn (7 ngày)', cafe_console: 'Quản lý vào/ra', cafe_help: 'Bấm nút cạnh tên để ghi vào/ra. Khi ra, thời gian sử dụng tự động cộng vào nhật ký học tập. Học viên cũng có thể tự bấm ở màn hình chính.',
   cafe_today_total: 'Tổng thời gian hôm nay', cafe_search: 'Tìm tên/chỗ ngồi', cafe_only_in: 'Chỉ đang sử dụng', cafe_today: 'Hôm nay', cafe_empty: 'Đăng ký học viên thì sẽ hiện ở đây.',
 });
+
+// 확인 필요(개입) 안내
+Object.assign(UI.ko, {
+  st_watch: '확인 필요', roster_watch_only: '확인 필요 학생만', flag_lowatt: '출석률 낮음',
+  iv_title: '오늘 확인할 학생', iv_none: '지금 따로 확인할 학생이 없어요. 👍', iv_help: '"확인 필요"는 문제가 생겼다는 뜻이 아니라, 강사가 한 번 살펴보면 좋다는 신호예요. 이유와 할 일을 아래에 적었어요. 처리했으면 "3일 보류"를 누르세요.',
+  iv_todo: '이렇게 하세요:', iv_open: '학생 열기', iv_msg_btn: '메시지 보내기', iv_snooze: '확인했어요 (3일 보류)', iv_snoozed: '3일 동안 확인 필요에서 뺐어요. 새로운 문제가 생기면 다시 나타나요.', iv_send: '보내기', iv_sent: '메시지를 보냈어요.',
+  iv_wb: '마음 상태', iv_msg: '답장 필요', iv_idle: '활동 없음', iv_att: '출석', iv_val: '검사 신뢰도', iv_dday: 'D-day',
+  iv_wb_why: '정서웰빙 검사에서 "주의" 구간이 나왔어요. (학생이 공유에 동의한 경우에만 보여요)', iv_wb_todo: '진단이 아니라 참고 결과예요. 조용히 1:1로 안부를 물어보고, 힘들다는 이야기가 나오면 보호자·전문 상담기관에 연결하세요. 상담일지에 기록해 두세요.', iv_wb_tpl: '{name}님, 요즘 마음은 어때요? 편할 때 이야기해 줘도 좋아요.',
+  iv_msg_why: '학생이 보낸 메시지에 아직 답하지 않았어요.', iv_msg_todo: '메시지 탭에서 짧게라도 답장해 주세요. 답이 늦으면 학생이 멈추기 쉬워요.',
+  iv_idle_why: '{n}일째 학습 기록과 출석 체크인이 없어요.', iv_idle_todo: '안부 메시지로 이유(시험·건강·흥미 저하)를 물어보세요. 목표가 너무 크면 이번 주 할 일을 줄여 주세요. 계속되면 보호자에게 연락하세요.', iv_idle_tpl: '{name}님, 요즘 어떻게 지내요? 이번 주 목표를 같이 가볍게 점검해 볼까요?',
+  iv_att_why: '최근 30일 출석률이 {rate}%예요.', iv_att_todo: '결석 사유를 물어보고, 시간표가 무리한지 점검하세요. 보호자에게 출석 상황을 알려 주세요.', iv_att_tpl: '{name}님, 최근 못 온 날이 있었네요. 무슨 일 있었는지 편하게 알려 주세요.',
+  iv_val_why: '{tests} 검사에서 같은 답을 반복하는 등 성의 없는 응답 패턴이 있어요.', iv_val_todo: '이 결과는 그대로 믿지 마세요. 학생과 응답 상황을 이야기하고, 조용한 환경에서 다시 검사하도록 권하세요.', iv_val_tpl: '{name}님, 지난 검사를 조금 급하게 하신 것 같아요. 시간 될 때 차분히 다시 해 볼까요?',
+  iv_dday_why: '"{label}"까지 D-{n}이에요.', iv_dday_todo: '남은 이정표·성적·할 일을 점검하고, 이번 주 우선순위를 3개로 줄여 주세요.', iv_dday_tpl: '{name}님, {label}까지 D-{n}이에요. 이번 주 우선순위를 같이 정해 볼까요?',
+});
+Object.assign(UI.vi, {
+  st_watch: 'Cần xem xét', roster_watch_only: 'Chỉ học viên cần xem xét', flag_lowatt: 'Tỷ lệ đi học thấp',
+  iv_title: 'Học viên cần xem hôm nay', iv_none: 'Hiện chưa có học viên nào cần xem. 👍', iv_help: '"Cần xem xét" không có nghĩa là có vấn đề, mà là tín hiệu để giáo viên xem qua. Lý do và việc cần làm ghi bên dưới. Xử lý xong hãy bấm "Tạm ẩn 3 ngày".',
+  iv_todo: 'Nên làm:', iv_open: 'Mở học viên', iv_msg_btn: 'Gửi tin nhắn', iv_snooze: 'Đã xem (ẩn 3 ngày)', iv_snoozed: 'Đã bỏ khỏi danh sách cần xem trong 3 ngày. Nếu có vấn đề mới sẽ hiện lại.', iv_send: 'Gửi', iv_sent: 'Đã gửi tin nhắn.',
+  iv_wb: 'Tinh thần', iv_msg: 'Cần trả lời', iv_idle: 'Không hoạt động', iv_att: 'Đi học', iv_val: 'Độ tin cậy', iv_dday: 'D-day',
+  iv_wb_why: 'Bài kiểm tra sức khỏe tinh thần ở mức "cần chú ý". (Chỉ hiện khi học viên đồng ý chia sẻ)', iv_wb_todo: 'Đây không phải chẩn đoán mà chỉ là kết quả tham khảo. Hãy nhẹ nhàng hỏi thăm riêng; nếu em nói đang rất khó khăn, hãy kết nối với phụ huynh/cơ sở tư vấn chuyên môn. Ghi lại vào nhật ký tư vấn.', iv_wb_tpl: '{name} à, dạo này tinh thần em thế nào? Khi nào thoải mái em cứ chia sẻ nhé.',
+  iv_msg_why: 'Học viên đã gửi tin nhắn nhưng chưa được trả lời.', iv_msg_todo: 'Hãy trả lời ngắn gọn ở tab Tin nhắn. Trả lời chậm dễ làm học viên bỏ dở.',
+  iv_idle_why: 'Đã {n} ngày không có nhật ký học tập hay điểm danh.', iv_idle_todo: 'Nhắn hỏi thăm lý do (thi cử, sức khỏe, mất hứng). Nếu mục tiêu quá lớn, hãy giảm việc tuần này. Nếu kéo dài, hãy liên hệ phụ huynh.', iv_idle_tpl: '{name} à, dạo này em thế nào? Mình cùng xem lại mục tiêu tuần này nhé?',
+  iv_att_why: 'Tỷ lệ đi học 30 ngày gần nhất là {rate}%.', iv_att_todo: 'Hỏi lý do vắng, kiểm tra lịch học có quá tải không. Báo phụ huynh về tình hình đi học.', iv_att_tpl: '{name} à, gần đây em có vài buổi vắng. Em cho cô/thầy biết có chuyện gì không nhé.',
+  iv_val_why: 'Bài {tests} có dấu hiệu trả lời qua loa như lặp lại cùng một đáp án.', iv_val_todo: 'Đừng tin hoàn toàn kết quả này. Trao đổi với học viên về cách làm bài và đề nghị làm lại ở nơi yên tĩnh.', iv_val_tpl: '{name} à, bài kiểm tra vừa rồi có vẻ em làm hơi vội. Khi rảnh mình làm lại thong thả nhé?',
+  iv_dday_why: '"{label}" còn D-{n}.', iv_dday_todo: 'Kiểm tra các mốc, điểm số, việc cần làm còn lại và thu gọn 3 ưu tiên cho tuần này.', iv_dday_tpl: '{name} à, còn D-{n} là đến "{label}". Mình cùng chọn ưu tiên tuần này nhé?',
+});

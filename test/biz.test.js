@@ -130,3 +130,18 @@ test('스터디카페 입·퇴실: 강사 기록, 이용 시간이 학습 기록
   l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, false); assert.equal(l.todayMin, 150);
   const d = (await get(`/api/students/${S.kid}`, S.t1)).data; assert.equal(d.visits.length, 1); assert.equal(d.visits[0].out, '11:30'); assert.equal(d.log[day], 150);
 });
+
+test('확인 필요 안내: 이유 데이터, 낮은 출석률, 보류(snooze)', async () => {
+  const day = new Date().toISOString().slice(0, 10);
+  const c = await post('/api/students', { name: '결석 잦은 학생', group: 'high' }, S.t1); const id = c.id;
+  for (const [d, st] of [['2026-09-01', 'a'], ['2026-09-02', 'a'], ['2026-09-03', 'p'], ['2026-09-04', 'a']]) await post('/api/attendance', { date: d, marks: { [id]: st } }, S.t1);
+  await put(`/api/students/${id}/data`, { data: { deep: { bigfive: [{ date: '2026-09-01', cat: { O: 3, C: 3, E: 3, A: 3, N: 3 }, overall: 3, v: ['same'] }] } } }, S.t1);
+  const look = async () => (await get(`/api/dashboard?today=2026-09-05`, S.t1)).learners.find((x) => x.id === id);
+  let l = await look(); assert.equal(l.flags.lowAtt, true); assert.equal(l.flags.validity, true); assert.deepEqual(l.validityTests, ['bigfive']); assert.equal(l.status, 'watch'); assert.equal(l.snoozed, false);
+  assert.equal((await post(`/api/students/${id}/snooze`, { days: 3 })).status, 401);
+  assert.equal((await post(`/api/students/${id}/snooze`, { days: 3 }, S.t2)).status, 403);
+  const sn = await post(`/api/students/${id}/snooze`, { days: 3 }, S.t1); assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(sn.snoozeUntil));
+  l = await get(`/api/dashboard?today=${day}`, S.t1).then((r) => r.learners.find((x) => x.id === id)); assert.equal(l.snoozed, true); assert.equal(l.status, 'ok');
+  assert.equal((await post(`/api/students/${id}/snooze`, { days: 0 }, S.t1)).snoozeUntil, '');
+  assert.equal((await look()).snoozed, false);
+});

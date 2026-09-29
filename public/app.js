@@ -187,7 +187,7 @@ function render() {
   if (!onboarding && !tabs.includes(state.tab)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
   $('#nav').hidden = onboarding;
   $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
-  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); scrollTo(0, 0); }));
+  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
   if (onboarding) { state.tab === 'account' ? renderAccount(app) : renderOnboarding(app); return app.insertAdjacentHTML('beforeend', legalFooter()); }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());

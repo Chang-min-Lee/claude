@@ -21,7 +21,7 @@ async function closeStudent() {
   roster.loaded = false; gdash.loaded = false; render(); scrollTo(0, 0);
 }
 
-const flagReasons = (l) => [l.flags.idle && t('flag_idle'), l.flags.validity && t('flag_validity'), l.flags.wellbeing && t('flag_wellbeing'), l.flags.ddaySoon && t('flag_dday', { n: l.goal.dday })].filter(Boolean);
+const flagReasons = (l) => [l.flags.lowAtt && t('flag_lowatt'), l.flags.idle && t('flag_idle'), l.flags.validity && t('flag_validity'), l.flags.wellbeing && t('flag_wellbeing'), l.flags.ddaySoon && t('flag_dday', { n: l.goal.dday })].filter(Boolean);
 const sum = (a) => a.reduce((x, y) => x + y, 0);
 const ddayCell = (l) => (l.goal.dday === null ? '' : ` <span class="tag">${ddayText(l.goal.dday)}</span>`);
 
@@ -37,6 +37,39 @@ function weeklySummary(list) {
   const n = list.length, w = list.filter((l) => l.status === 'watch');
   const avgMin = n ? Math.round(sum(list.map((l) => sum(l.week))) / n) : 0, avgCi = n ? (sum(list.map((l) => l.checkinsWeek)) / n).toFixed(1) : '0';
   return [t('ws_head', { date: today(), n, ok: n - w.length, w: w.length }), t('ws_avg', { min: avgMin, ci: avgCi }), w.length ? t('ws_watch', { names: w.map((l) => l.name).join(', ') }) : ''].filter(Boolean).join('\n');
+}
+// 개입(확인) 안내: 이유와 해야 할 일, 보낼 메시지 초안을 함께 보여준다
+const iv = { open: null, text: '', msg: '' };
+function interventions(l) {
+  const out = [], nm = l.name;
+  if (l.flags.wellbeing) out.push({ k: 'wb', sev: 4, tab: 'counsel', why: t('iv_wb_why'), todo: t('iv_wb_todo'), tpl: t('iv_wb_tpl', { name: nm }) });
+  if (l.awaiting) out.push({ k: 'msg', sev: 3, tab: 'messages', why: t('iv_msg_why'), todo: t('iv_msg_todo'), tpl: '' });
+  if (l.flags.idle && !l.snoozed) out.push({ k: 'idle', sev: 3, tab: 'home', why: t('iv_idle_why', { n: l.idleDays ?? '?' }), todo: t('iv_idle_todo'), tpl: t('iv_idle_tpl', { name: nm }) });
+  if (l.flags.lowAtt && !l.snoozed) out.push({ k: 'att', sev: 2, tab: 'input', why: t('iv_att_why', { rate: l.attRate ?? '?' }), todo: t('iv_att_todo'), tpl: t('iv_att_tpl', { name: nm }) });
+  if (l.flags.validity && !l.snoozed) out.push({ k: 'val', sev: 2, tab: 'tests', why: t('iv_val_why', { tests: (l.validityTests || []).map((id) => tx(id).name).join(', ') }), todo: t('iv_val_todo'), tpl: t('iv_val_tpl', { name: nm }) });
+  if (l.flags.ddaySoon) out.push({ k: 'dday', sev: 1, tab: 'input', why: t('iv_dday_why', { n: l.goal.dday, label: l.goal.label || t('goal_title') }), todo: t('iv_dday_todo'), tpl: t('iv_dday_tpl', { name: nm, label: l.goal.label || t('goal_title'), n: l.goal.dday }) });
+  return out.sort((a, b) => b.sev - a.sev);
+}
+function ivCard() {
+  const rows = roster.learners.filter((l) => l.enroll !== 'left').map((l) => [l, interventions(l)]).filter(([, a]) => a.length).sort((x, y) => y[1][0].sev - x[1][0].sev);
+  if (!rows.length) return `<div class="card callout"><h2>✅ ${t('iv_title')}</h2><p>${t('iv_none')}</p></div>`;
+  return `<div class="card"><h2>${t('iv_title')} <span class="sub">${rows.length}</span></h2><p class="sub">${t('iv_help')}</p>
+    ${rows.map(([l, arr]) => `<div class="iv"><div><b>${esc(l.name)}</b> ${l.className ? `<span class="sub">${esc(l.className)}</span>` : ''}</div>
+      <ul class="ivlist">${arr.map((a) => `<li><span class="tag ${a.sev >= 3 ? 'weak' : ''}">${t('iv_' + a.k)}</span> ${esc(a.why)}<br><span class="sub"><b>${t('iv_todo')}</b> ${esc(a.todo)}</span></li>`).join('')}</ul>
+      <div class="row"><button class="primary" data-ivopen="${esc(l.id)}:${arr[0].tab}">${t('iv_open')}</button><button data-ivmsg="${esc(l.id)}">${t('iv_msg_btn')}</button>${l.flags.idle || l.flags.validity || l.flags.lowAtt ? `<button data-ivsnooze="${esc(l.id)}">${t('iv_snooze')}</button>` : ''}</div>
+      ${iv.open === l.id ? `<div class="row"><textarea id="ivtext" rows="2" maxlength="500">${esc(iv.text)}</textarea></div><div class="row"><button class="primary" id="ivsend">${t('iv_send')}</button><button id="ivcancel">${t('btn_cancel')}</button></div>` : ''}</div>`).join('')}
+    ${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</div>`;
+}
+function bindIv(app) {
+  app.querySelectorAll('[data-ivopen]').forEach((b) => (b.onclick = () => { const [id, tab] = b.dataset.ivopen.split(':'); openStudent(id, tab); }));
+  app.querySelectorAll('[data-ivmsg]').forEach((b) => (b.onclick = () => { const l = roster.learners.find((x) => x.id === b.dataset.ivmsg); iv.open = l.id; iv.text = (interventions(l).find((a) => a.tpl) || {}).tpl || ''; iv.msg = ''; render(); }));
+  app.querySelectorAll('[data-ivsnooze]').forEach((b) => (b.onclick = async () => { try { await api(`/api/students/${b.dataset.ivsnooze}/snooze`, { method: 'POST', body: { days: 3 } }); iv.msg = t('iv_snoozed'); } catch (e) { iv.msg = e.message; } roster.loaded = false; render(); }));
+  if ($('#ivcancel')) $('#ivcancel').onclick = () => { iv.open = null; render(); };
+  if ($('#ivsend')) $('#ivsend').onclick = async () => {
+    const text = $('#ivtext').value.trim(); if (!text) return; $('#ivsend').disabled = true;
+    try { await api(`/api/students/${iv.open}/messages`, { method: 'POST', body: { text } }); iv.msg = t('iv_sent'); iv.open = null; roster.loaded = false; } catch (e) { iv.msg = e.message; }
+    render();
+  };
 }
 // 처음 시작하는 관리자를 위한 안내
 function quickStart() {
@@ -54,7 +87,7 @@ function renderRoster(app) {
   const admin = roleOf() === 'admin', q = roster.q.trim().toLowerCase();
   const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l) && (!roster.cls || (l.className || '') === (roster.cls === '_none' ? '' : roster.cls)) && (roster.left || l.enroll !== 'left'));
   const watchN = roster.learners.filter((l) => l.status === 'watch').length;
-  app.innerHTML = `${roster.learners.length ? `<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
+  app.innerHTML = `${roster.learners.length ? `${ivCard()}<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
       <div class="row"><input type="text" id="rq" placeholder="${t('roster_search')}" value="${esc(roster.q)}">
         ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
       <div class="row"><select id="rcls"><option value="">${t('cls_all')}</option>${[...new Set(roster.learners.map((l) => l.className || ''))].filter((n) => n).sort().map((n) => `<option value="${esc(n)}" ${roster.cls === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rleft" ${roster.left ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cls_show_left')}</span></label></div>
@@ -75,6 +108,7 @@ function renderRoster(app) {
   $('#rcls').onchange = (e) => { roster.cls = e.target.value; render(); };
   $('#rleft').onchange = (e) => { roster.left = e.target.checked; render(); };
   $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
+  bindIv(app);
   app.querySelectorAll('[data-qs]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.qs; render(); }));
   app.querySelectorAll('[data-flag]').forEach((b) => (b.onclick = () => { if (b.dataset.flag === 'watch') { roster.watch = !roster.watch; } else roster.flag = roster.flag === b.dataset.flag ? '' : b.dataset.flag; render(); }));
   if ($('#bmsend')) $('#bmsend').onclick = async () => {

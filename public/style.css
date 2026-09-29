@@ -200,3 +200,5 @@ button.tile { border:1px solid transparent; text-align:center; font-weight:600; 
 button.tile.on { border-color:var(--gold); background:var(--gold2); }
 .legal h2 { margin-top:1.2em; }
 a { color:var(--main-strong); } a:hover { color:var(--main); }
+.iv { border-top:1px solid var(--line); padding:12px 0; } .iv:first-of-type { border-top:0; }
+.ivlist { margin:.4em 0; padding-left:1.1em; } .ivlist li { margin:.5em 0; }
