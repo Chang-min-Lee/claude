@@ -123,3 +123,25 @@ test('베트남어: 오류 메시지·AI 프롬프트·기본 계획', async () 
   assert.match((await post('/api/quiz', { subject: 'Toán' }, null, 'POST', 'vi')).error, /ANTHROPIC_API_KEY/);
   assert.match((await post('/api/chat', { messages: [{ role: 'user', content: 'x' }] }, null, 'POST', 'vi')).reply, /Để dùng AI/);
 });
+
+test('심층검사: 저장 검증·보호자 요약(정서웰빙 제외)·AI 프롬프트', async () => {
+  server.kill(); await new Promise((r) => setTimeout(r, 200));
+  await start({ ANTHROPIC_API_KEY: 'test', ANTHROPIC_BASE_URL: `http://localhost:${mock.address().port}` });
+  const kid = await post('/api/signup', { email: 'deep@b.co', password: 'password1', name: '하나' });
+  const good = { date: '2026-09-29', cat: { O: 4, C: 3.5, E: 2, A: 3, N: 9 }, overall: 3.3, v: ['same', 'evil'] }; // N=9는 범위 초과 → 5로 보정
+  const wb = { date: '2026-09-29', cat: { stable: 2, energy: 2, relation: 3, stress: 1.5 }, overall: 2.1, v: [] };
+  await post('/api/data', { data: { deep: { bigfive: [{ cat: { O: 1 } }, good], wellbeing: [wb], hacked: [good] } } }, kid.token, 'PUT');
+  const me = await get('/api/me', kid.token);
+  assert.equal(me.data.deep.bigfive.length, 1); // 영역이 빠진 기록은 버림
+  assert.equal(me.data.deep.bigfive[0].cat.N, 5); assert.deepEqual(me.data.deep.bigfive[0].v, ['same']);
+  assert.equal(me.data.deep.hacked, undefined); assert.equal(me.data.deep.wellbeing.length, 1);
+  const g = await post('/api/signup', { email: 'g3@b.co', password: 'password1', name: '보호자', role: 'guardian' });
+  await post('/api/link', { code: kid.user.shareCode }, g.token);
+  const dash = await get('/api/dashboard', g.token);
+  assert.equal(dash.learners[0].deep.bigfive.overall, 3.3);
+  assert.equal(dash.learners[0].deep.wellbeing, undefined); // 정서웰빙은 보호자에게 내려가지 않음
+  assert.equal(JSON.stringify(dash).includes('stress'), false);
+  mockReplies = ['ok'];
+  await post('/api/chat', { messages: [{ role: 'user', content: 'hi' }], profile: { group: 'high', deep: '성격유형검사: 적극적 외향형' } });
+  assert.match(lastAiBody.system, /적극적 외향형/);
+});

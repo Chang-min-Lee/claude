@@ -40,3 +40,14 @@ header select { width:auto; margin-left:auto; padding:6px 10px; }
 header h1 { flex:1; min-width:0; }
 header nav { flex-basis:100%; }
 @media (max-width:600px) { header { position:static; } }
+.tag.strong { background:var(--main); color:#fff; }
+.tag.weak { background:#fdecc8; color:#7a4a00; }
+@media (prefers-color-scheme: dark) { .tag.weak { background:#4a3510; color:#ffd88a; } }
+.titem { padding:12px 0; border-bottom:1px solid var(--line); }
+.titem:last-of-type { border-bottom:0; }
+.ctx { background:var(--main2); border-radius:10px; padding:10px 12px; margin:8px 0; white-space:pre-line; font-size:.95em; }
+.qtext { white-space:pre-line; margin:6px 0 8px; }
+.choice { display:block; width:100%; text-align:left; margin:6px 0; }
+.choice.on { background:var(--main); color:#fff; border-color:var(--main); }
+.callout { border-color:var(--main); background:var(--main2); }
+.callout.warn { border-color:#e0a030; }

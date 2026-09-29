@@ -11,7 +11,10 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const SYNC_KEYS = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong'];
+const SYNC_KEYS = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong', 'deep'];
+// 심층검사 id별 영역 키(구조 검증용). wellbeing(정서웰빙)은 민감 정보라 보호자/교사 요약에서 제외한다.
+const DEEP_CATS = { bigfive: 'OCEAN', workvalues: ['growth', 'stability', 'reward', 'autonomy', 'recognition', 'fun'], aptitude: ['lang', 'math', 'spatial', 'social', 'logic', 'creative'], sdl: ['plan', 'monitor', 'goal', 'persist'], wellbeing: ['stable', 'energy', 'relation', 'stress'] };
+const SHARED_DEEP = ['bigfive', 'workvalues', 'aptitude', 'sdl'];
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -22,6 +25,25 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 const DB_FILE = path.join(DATA_DIR, 'db.json');
 let db = { users: {}, sessions: {} };
 try { db = JSON.parse(fs.readFileSync(DB_FILE, 'utf8')); } catch {}
+// 심층검사 기록 검증: 알려진 검사/영역만, 점수는 1~5 범위 숫자, 검사당 최근 5건
+function sanitizeDeep(d) {
+  const out = {};
+  if (!d || typeof d !== 'object') return out;
+  for (const [id, cats] of Object.entries(DEEP_CATS)) {
+    if (!Array.isArray(d[id])) continue;
+    const keys = Array.isArray(cats) ? cats : cats.split('');
+    const num = (v) => (Number.isFinite(+v) ? Math.min(5, Math.max(1, Math.round(+v * 10) / 10)) : null);
+    out[id] = d[id].slice(-5).map((r) => {
+      const cat = {};
+      for (const k of keys) { const v = num(r?.cat?.[k]); if (v === null) return null; cat[k] = v; }
+      const overall = num(r.overall);
+      if (overall === null) return null;
+      return { date: /^\d{4}-\d{2}-\d{2}$/.test(r.date) ? r.date : '', cat, overall, v: (Array.isArray(r.v) ? r.v : []).filter((x) => ['same', 'run', 'flat'].includes(x)) };
+    }).filter(Boolean);
+  }
+  return out;
+}
+
 function persist() {
   const tmp = DB_FILE + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(db));
@@ -121,13 +143,14 @@ const LEVEL = {
   vi: { elementary: 'học sinh tiểu học', middle: 'học sinh THCS', high: 'học sinh THPT', college: 'sinh viên', adult: 'người học trưởng thành' },
 };
 
-function systemPrompt({ name, group, riasec, tasks } = {}, lang = 'ko') {
+function systemPrompt({ name, group, riasec, deep, tasks } = {}, lang = 'ko') {
   const ko = lang === 'ko';
   return [
     ko ? '당신은 진로탐색과 학습관리를 돕는 AI 코치입니다. 한국어로 답합니다.' : 'Bạn là huấn luyện viên AI giúp hướng nghiệp và quản lý học tập. Luôn trả lời bằng tiếng Việt.',
     STYLE[lang][group] || STYLE[lang].adult,
     name ? `${ko ? '사용자 이름' : 'Tên người dùng'}: ${String(name).slice(0, 20)}` : '',
     riasec ? `${ko ? '진로 흥미검사(RIASEC) 상위 유형' : 'Nhóm sở thích nghề nghiệp (RIASEC) nổi bật'}: ${String(riasec).slice(0, 60)}` : '',
+    deep ? `${ko ? '심층 검사 결과' : 'Kết quả kiểm tra chuyên sâu'}: ${String(deep).slice(0, 500)}` : '',
     tasks ? `${ko ? '현재 학습 목표/할 일' : 'Mục tiêu/việc đang làm'}: ${String(tasks).slice(0, 600)}` : '',
     ko ? '원칙: 정답을 강요하지 말고 질문을 통해 스스로 탐색하도록 돕고, 다음에 할 수 있는 작은 행동 1~3가지를 제안하세요.'
       : 'Nguyên tắc: không áp đặt đáp án; hãy đặt câu hỏi để người dùng tự khám phá và gợi ý 1–3 hành động nhỏ tiếp theo.',
@@ -230,6 +253,7 @@ function summarize(u, todayStr) {
     id: u.id, name: u.name, group: d.profile?.group || null, streak, week, today: week[6],
     openTasks: tasks.filter((t) => !t.done).slice(0, 5).map((t) => t.text), doneCount: tasks.filter((t) => t.done).length, openCount: tasks.filter((t) => !t.done).length,
     riasec: top, quiz: (d.quiz || []).slice(-5),
+    deep: Object.fromEntries(SHARED_DEEP.filter((id) => d.deep?.[id]?.length).map((id) => [id, d.deep[id].at(-1)])),
   };
 }
 
@@ -273,6 +297,7 @@ const routes = {
     if (Array.isArray(data.chat)) data.chat = data.chat.slice(-50);
     if (Array.isArray(data.quiz)) data.quiz = data.quiz.slice(-100);
     if (Array.isArray(data.wrong)) data.wrong = data.wrong.slice(-50);
+    if ('deep' in data) data.deep = sanitizeDeep(data.deep);
     u.data = { ...u.data, ...data };
     persist();
     return { ok: true };

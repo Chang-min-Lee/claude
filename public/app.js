@@ -26,11 +26,12 @@ let state = {
   chat: store.get('chat', []),
   quiz: store.get('quiz', []), // [{date, subject, score, total}]
   wrong: store.get('wrong', []), // 틀린 문제 [{subject, q, choices, answer, explain}]
+  deep: store.get('deep', {}), // 심층검사 기록 { testId: [{date, cat, overall, v}] } 최근 5개
   token: store.get('token', null),
   user: null,
   tab: 'home',
 };
-const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong'];
+const SYNC = ['profile', 'answers', 'tasks', 'log', 'chat', 'quiz', 'wrong', 'deep'];
 let pushTimer;
 function schedulePush() {
   if (!state.token || state.user?.role !== 'learner') return;
@@ -84,11 +85,12 @@ function streak() {
 }
 function profileForAI() {
   const top = answered() === Q().length ? topTypes().map((ty) => `${R()[ty].name}(${ty})`).join(', ') : '';
-  return { name: state.profile.name, group: state.profile.group, riasec: top, tasks: state.tasks.filter((t) => !t.done).map((t) => t.text).slice(0, 10).join(' / ') };
+  const deep = TEST_IDS.filter((id) => id !== 'wellbeing' && state.deep[id]?.length).map((id) => `${tx(id).name}: ${describeTest(id, state.deep[id].at(-1)).headline}`).join(' / ');
+  return { name: state.profile.name, group: state.profile.group, riasec: top, deep, tasks: state.tasks.filter((t) => !t.done).map((t) => t.text).slice(0, 10).join(' / ') };
 }
 
 // ---- 화면 ----
-const LEARNER_TABS = ['home', 'explore', 'study', 'quiz', 'coach', 'account'];
+const LEARNER_TABS = ['home', 'explore', 'tests', 'study', 'quiz', 'coach', 'account'];
 const GUARDIAN_TABS = ['dash', 'account'];
 function render() {
   const app = $('#app');
@@ -102,7 +104,7 @@ function render() {
   $('#nav').innerHTML = tabs.map((k) => `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${t('tab_' + k)}</button>`).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; render(); }));
   if (onboarding) return state.tab === 'account' ? renderAccount(app) : renderOnboarding(app);
-  ({ home: renderHome, explore: renderExplore, study: renderStudy, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash }[state.tab] || renderHome)(app);
+  ({ home: renderHome, explore: renderExplore, tests: renderTests, study: renderStudy, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash }[state.tab] || renderHome)(app);
 }
 
 function renderOnboarding(app) {
@@ -137,7 +139,7 @@ function renderHome(app) {
     <div class="card"><button data-go="study">${t('tab_study')}</button> <button data-go="quiz">${t('tab_quiz')}</button> <button data-go="coach">${t('btn_ai_consult')}</button> <button id="reset">${t('btn_reset')}</button></div>`;
   app.querySelectorAll('[data-go]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.go; render(); }));
   $('#reset').onclick = () => { if (confirm(t('confirm_reset'))) {
-      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], tab: 'home' });
+      Object.assign(state, { profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {}, tab: 'home' });
       SYNC.forEach(save); render();
     } };
 }
@@ -229,6 +231,70 @@ function renderCoach(app) {
   $('#clr').onclick = () => { state.chat = []; save('chat'); render(); };
 }
 
+// ---- 심층 검사 ----
+let tv = { mode: 'list', id: null, ans: [] }; // 목록 / 응시 / 결과
+const estMin = (n) => Math.max(2, Math.round(n * 10 / 60)); // 문항당 약 10초
+const scaleBar = (v) => `<div class="bar" style="flex:1"><i style="width:${v / 5 * 100}%"></i></div>`;
+
+function renderTests(app) {
+  if (GROUPS[state.profile.group].kid) { app.innerHTML = `<div class="card"><h2>${t('tests_title')}</h2><p>${t('tests_kid_note')}</p></div>`; return; }
+  if (tv.mode === 'take') return renderTake(app);
+  if (tv.mode === 'result' && state.deep[tv.id]?.length) return renderTestResult(app, tv.id);
+  tv = { mode: 'list', id: null, ans: [] };
+  app.innerHTML = `<div class="card"><h2>${t('tests_title')}</h2><p class="sub">${t('tests_intro')}</p></div>` + TESTS.map((test) => {
+    const T = tx(test.id), last = state.deep[test.id]?.at(-1);
+    return `<div class="card"><h2>${esc(T.name)}</h2><p class="sub">${esc(T.intro)} · ${t('test_meta', { n: test.items.length, m: estMin(test.items.length) })}</p>
+      ${test.sensitive ? `<p class="sub">${esc(T.safety)}</p><p class="sub">${t('test_private')}</p>` : ''}
+      ${last ? `<p><b>${esc(describeTest(test.id, last).headline)}</b> <span class="sub">${t('test_last', { date: esc(last.date) })}</span></p>` : ''}
+      <button class="primary" data-start="${test.id}">${last ? t('btn_retest') : t('btn_start_test')}</button> ${last ? `<button data-view="${test.id}">${t('btn_view_result')}</button>` : ''}</div>`;
+  }).join('');
+  app.querySelectorAll('[data-start]').forEach((b) => (b.onclick = () => { tv = { mode: 'take', id: b.dataset.start, ans: [] }; render(); scrollTo(0, 0); }));
+  app.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => { tv = { mode: 'result', id: b.dataset.view, ans: [] }; render(); scrollTo(0, 0); }));
+}
+
+function renderTake(app) {
+  const test = testById(tv.id), T = tx(test.id), n = test.items.length;
+  const done = tv.ans.filter((v) => v !== undefined).length;
+  const item = (it, i) => {
+    if (test.perf) {
+      const q = T.items[i];
+      return `<div class="titem"><b>${i + 1}.</b> ${q.context ? `<div class="ctx">${esc(q.context)}</div>` : ''}<div class="qtext">${esc(q.prompt)}</div>
+        ${q.choices.map((c, k) => `<button class="choice ${tv.ans[i] === k ? 'on' : ''}" data-i="${i}" data-v="${k}">${'①②③④'[k]} ${esc(c)}</button>`).join('')}</div>`;
+    }
+    return `<div class="titem"><b>${i + 1}.</b> ${esc(T.items[i])}<div class="scale">${[1, 2, 3, 4, 5].map((v) => `<button data-i="${i}" data-v="${v}" class="${tv.ans[i] === v ? 'on' : ''}">${t('lk' + v)}</button>`).join('')}</div></div>`;
+  };
+  app.innerHTML = `<div class="card"><h2>${esc(T.name)}</h2><p class="sub">${t('test_progress', { a: done, b: n })}</p><div class="bar"><i style="width:${done / n * 100}%"></i></div>
+    ${test.sensitive ? `<p class="sub" style="margin-top:12px">${esc(T.safety)}</p>` : ''}
+    <div style="margin-top:14px">${test.items.map(item).join('')}</div>
+    <button class="primary" id="finish" ${done < n ? 'disabled' : ''}>${t('btn_finish_test')}</button> <button id="cancel">${t('btn_cancel')}</button></div>`;
+  app.querySelectorAll('[data-i]').forEach((b) => (b.onclick = () => { tv.ans[+b.dataset.i] = +b.dataset.v; const y = scrollY; render(); scrollTo(0, y); }));
+  $('#cancel').onclick = () => { tv = { mode: 'list', id: null, ans: [] }; render(); };
+  $('#finish').onclick = () => {
+    const r = scoreTest(test, tv.ans);
+    const rec = { date: today(), cat: r.cat, overall: r.overall, v: validityOf(test, tv.ans) };
+    state.deep[test.id] = [...(state.deep[test.id] || []), rec].slice(-5); save('deep');
+    tv = { mode: 'result', id: test.id, ans: [] }; render(); scrollTo(0, 0);
+  };
+}
+
+function renderTestResult(app, id) {
+  const test = testById(id), T = tx(id), hist = state.deep[id], cur = hist.at(-1), prev = hist.at(-2);
+  const d = describeTest(id, cur);
+  const how = id === 'aptitude' ? t('res_how_apt') : id === 'wellbeing' ? t('res_how_wb') : t('res_how');
+  const delta = (k) => { if (!prev) return ''; const x = Math.round((cur.cat[k] - prev.cat[k]) * 10) / 10; return x === 0 ? '' : ` <span class="sub">${x > 0 ? '▲' : '▼'}${Math.abs(x).toFixed(1)}</span>`; };
+  app.innerHTML = `<div class="card"><h2>${esc(T.name)}</h2><p style="font-size:1.15em"><b>${esc(d.headline)}</b></p>
+      <p>${d.tags.map(([l, c]) => `<span class="tag ${c}">${esc(l)}</span>`).join('')}</p>
+      ${radarSvg(test.cats.map((k) => ({ label: testLabel(id, k), short: shortLabel(id, k), value: cur.cat[k] })))}
+      ${test.cats.map((k) => `<div class="row"><span style="width:130px">${esc(testLabel(id, k))}</span>${scaleBar(cur.cat[k])}<span style="width:70px;text-align:right">${cur.cat[k].toFixed(1)}${delta(k)}</span></div>`).join('')}
+      <p class="sub">${prev ? t('res_prev', { date: esc(prev.date) }) : t('res_first')}</p><p class="sub">${how}</p></div>
+    ${cur.v?.length ? `<div class="card callout warn"><h2>⚠ ${t('valid_title')}</h2><p>${t('valid_body')}</p><ul>${cur.v.map((c) => `<li>${t('valid_' + c)}</li>`).join('')}</ul></div>` : ''}
+    ${d.attention ? `<div class="card callout"><h2>💬 ${t('wb_title')}</h2><p>${t('wb_body')}</p><p><b>${t('wb_help')}</b></p><p class="sub">${esc(T.safety)}</p></div>` : ''}
+    ${test.sensitive ? `<p class="sub">${t('test_private')}</p>` : ''}
+    <div class="card"><button class="primary" data-start="${id}">${t('btn_retest')}</button> <button id="back">${t('btn_to_list')}</button></div>`;
+  $('[data-start]').onclick = () => { tv = { mode: 'take', id, ans: [] }; render(); scrollTo(0, 0); };
+  $('#back').onclick = () => { tv = { mode: 'list', id: null, ans: [] }; render(); };
+}
+
 // ---- 퀴즈 ----
 let qz = null; // { subject, questions, i, picked, score, done, review }
 function renderQuiz(app) {
@@ -300,7 +366,7 @@ function renderAccount(app) {
       if (!pw) return;
       try {
         await api('/api/delete-account', { method: 'POST', body: { password: pw } });
-        localStorage.clear(); Object.assign(state, { token: null, user: null, profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], tab: 'home' }); render();
+        localStorage.clear(); Object.assign(state, { token: null, user: null, profile: null, answers: {}, tasks: [], log: {}, chat: [], quiz: [], wrong: [], deep: {}, tab: 'home' }); render();
       } catch (e) { msg(e.message); }
     };
     if (learner) {
@@ -348,6 +414,7 @@ function renderDash(app) {
         <div class="week" style="margin-top:12px">${l.week.map((m, i) => `<div><i style="height:${m / max * 80}px"></i>${days[i]}<br>${m}</div>`).join('')}</div>
         <p>${t('goals_line', { d: l.doneCount, o: l.openCount })}</p>${l.openTasks.length ? `<ul>${l.openTasks.map((t) => `<li>${esc(t)}</li>`).join('')}</ul>` : ''}
         <p>${t('riasec_line')} ${l.riasec.length ? l.riasec.map((ty) => `<span class="tag">${esc(R()[ty].name)}</span>`).join('') : `<span class="sub">${t('not_tested')}</span>`}</p>
+        <p>${t('deep_title')}: ${Object.keys(l.deep || {}).length ? Object.entries(l.deep).map(([id, r]) => `<span class="tag">${esc(tx(id).name)} · ${esc(describeTest(id, r).headline)}</span>`).join('') : `<span class="sub">${t('deep_none')}</span>`}</p>
         <p>${t('quiz_avg')} ${avg === null ? `<span class="sub">${t('no_record')}</span>` : unit('score_pt', avg)}</p></div>`;
     }).join('');
     el.querySelectorAll('[data-u]').forEach((b) => (b.onclick = async () => { if (confirm(t('confirm_unlink'))) { await api('/api/unlink', { method: 'POST', body: { id: b.dataset.u } }); render(); } }));
