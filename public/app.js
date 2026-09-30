@@ -134,11 +134,15 @@ function profileForAI() {
 
 // ---- 화면 전환 ----
 const LEARNER_TABS = ['home', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'quiz', 'coach', 'account'];
-const STUDENT_VIEW_TABS = ['home', 'input', 'tests', 'study', 'plan', 'career', 'report', 'messages', 'counsel']; // 강사가 학생을 열었을 때
+const STUDENT_VIEW_TABS = ['sdash', 'input', 'tests', 'plan', 'career', 'report', 'counsel', 'messages']; // 강사가 학생을 열었을 때
 const GUARDIAN_TABS = ['dash', 'account'];
-const STAFF_TABS = ['roster', 'classes', 'cafe', 'register', 'data', 'staff', 'account'];
+const STAFF_TABS = ['roster', 'classes', 'cafe', 'data', 'staff', 'account']; // 학생 등록(register)은 학생 목록의 버튼으로 들어간다
+const STAFF_HIDDEN = ['register'];
+const cafeOn = () => typeof roster !== 'undefined' && (roster.learners.some((l) => l.orgType === 'studycafe') || state.tab === 'cafe'); // 스터디카페 학생이 있을 때만 입퇴실 메뉴 표시
 const roleOf = () => state.user?.role || 'learner';
 const ICONS = {
+  sdash: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><path d="M13 16.5h7M13 19.5h4"/>',
+  counsel: '<path d="M4 5.5h16v10H9.5L5 19.5v-4H4z"/><path d="M8 9.5h8M8 12.5h5"/>',
   input: '<path d="M4 20h4l10.5-10.5a2.1 2.1 0 0 0-3-3L5 17z"/><path d="M13.5 8.5l3 3"/>',
   home: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M10 20v-5h4v5"/>',
   tests: '<rect x="6" y="4" width="12" height="17" rx="2"/><path d="M9 4h6v3H9z"/><path d="m9.5 13.5 2 2 3.5-4"/>',
@@ -172,11 +176,10 @@ function tabsNow() {
   if (state.viewAs) return state.ro ? ['report'] : STUDENT_VIEW_TABS.filter(tabOk);
   const role = roleOf();
   if (role === 'guardian') return GUARDIAN_TABS;
-  if (role === 'teacher') return STAFF_TABS.filter((k) => k !== 'staff');
-  if (role === 'admin') return STAFF_TABS;
+  if (role === 'teacher' || role === 'admin') return STAFF_TABS.filter((k) => (k !== 'staff' || role === 'admin') && (k !== 'cafe' || cafeOn()));
   return LEARNER_TABS.filter(tabOk);
 }
-const RENDERERS = () => ({ cafe: renderCafe, classes: renderClasses, data: renderAnalytics, career: renderCareer, home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
+const RENDERERS = () => ({ sdash: renderSdash, cafe: renderCafe, classes: renderClasses, data: renderAnalytics, career: renderCareer, home: renderHome, input: renderInput, tests: renderTests, messages: renderMessages, counsel: renderCounsel, study: renderStudy, plan: renderPlan, report: renderReport, quiz: renderQuiz, coach: renderCoach, account: renderAccount, dash: renderDash, roster: renderRoster, register: renderRegister, staff: renderStaffMgmt });
 function render() {
   const app = $('#app');
   document.documentElement.lang = lang; document.title = orgName(); $('#title').textContent = orgName();
@@ -184,17 +187,17 @@ function render() {
   document.body.classList.toggle('kid', !!state.profile && state.profile.group === 'elementary' && (!staffLike || !!state.viewAs));
   const onboarding = !state.user && !state.profile;
   const tabs = onboarding ? [] : tabsNow();
-  if (!onboarding && !tabs.includes(state.tab)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
+  if (!onboarding && !tabs.includes(state.tab) && !(STAFF_HIDDEN.includes(state.tab) && ['teacher', 'admin'].includes(role) && !state.viewAs)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
   $('#nav').hidden = onboarding;
-  $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
+  $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab || (state.tab === 'register' && k === 'roster') ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
   $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
   if (onboarding) { state.tab === 'account' ? renderAccount(app) : state.trial ? renderOnboarding(app) : renderLanding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());
   app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); };
-  if (state.viewAs) { // 학생을 열어 본 상태의 안내 줄
-    app.insertAdjacentHTML('afterbegin', `<div class="viewas noprint"><button id="backlist">← ${t('back_list')}</button> <b>${esc(state.viewAs.name)}</b>${state.viewAs.teacher ? ` <span class="sub">· ${t('teacher_lbl')}: ${esc(state.viewAs.teacher.name)}</span>` : ''}${state.ro ? ` <span class="tag">${t('read_only')}</span>` : ''}
-      ${!state.ro && !state.viewAs.managed && !PREVIEW ? ` <button id="resetcode">🔑 ${t('reset_issue')}</button>` : ''} <span class="sub" id="resetmsg"></span></div>`);
+  if (state.viewAs) { // 학생을 열어 본 상태: 위쪽 학생 전환 막대
+    app.insertAdjacentHTML('afterbegin', studentBar());
+    $('#stusw').onchange = (e) => openStudent(e.target.value, tabsNow().includes(state.tab) ? state.tab : 'sdash');
     $('#backlist').onclick = closeStudent;
     if ($('#resetcode')) $('#resetcode').onclick = async () => {
       try { const r = await api(`/api/users/${state.viewAs.id}/reset-code`, { method: 'POST' }); $('#resetmsg').textContent = t('reset_issued', { name: r.name, code: r.code }); } catch (e) { $('#resetmsg').textContent = e.message; }

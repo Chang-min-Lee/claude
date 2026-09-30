@@ -334,3 +334,23 @@ Object.assign(UI.vi, {
   login_as_learner: 'Đăng nhập học viên', login_as_guardian: 'Đăng nhập phụ huynh', login_as_teacher: 'Đăng nhập giáo viên', login_as_admin: 'Đăng nhập quản trị viên',
   login_wrong_role: 'Đây là tài khoản {role}. Vui lòng vào bằng mục 「{right}」.',
 });
+
+// 학생 대시보드(강사)·학생 전환
+Object.assign(UI.ko, {
+  tab_sdash: '대시보드', sd_title: '학생 한눈에 보기', sd_sub: '검사·학습·출석 상황을 한 화면에서 확인해요.', sd_switch: '학생 전환',
+  sd_before: '검사 전 상태', sd_after: '분석 이후', sd_before_empty: '상담 문진이나 진단서를 작성하면 여기에 나와요.', sd_after_empty: '검사를 하면 분석 내용이 여기에 나와요.',
+  sd_progress: '진도율', sd_sdl: '자기주도학습 {n}/5', sd_no_test: '검사 전', sd_week: '이번 주 체크인', sd_att_n: '기록 {n}건', sd_status: '상태', sd_reasons: '확인할 이유 {n}개', sd_no_reason: '특이사항 없음',
+  sd_pace_ok: '목표 대비 순조로워요. 지금 페이스를 유지하면 돼요.', sd_pace_slow: '남은 기간에 비해 진도가 느려요. 이번 주 우선순위를 줄여 집중해 보세요.', sd_pace_over: '목표일이 지났어요. 결과를 확인하고 다음 목표를 정해 주세요.',
+  sd_peer: '평균 비교', sd_peer_avg: '같은 그룹 {n}명 평균 {v}', sd_test_avg: '검사 평균 점수', sd_peer_few: '비교할 학생이 부족해요 (현재 {n}명). 같은 반이나 같은 목표 유형 학생이 2명 이상이면 표시돼요.',
+  sd_model: '운영 지표', sd_week_time: '최근 7일 학습 시간', sd_visits7: '최근 7일 입실 횟수', sd_plan_rate: '주간계획 이행률', sd_sessions: '상담 횟수', sd_diag_rounds: '진단서 회차', sd_goal_prep: '목표일까지',
+  sd_trend: '주차별 학습 시간', sd_trend_help: '최근 8주 동안 매주 학습한 시간(시간 단위)이에요.', sd_shortcuts: '바로가기',
+});
+Object.assign(UI.vi, {
+  tab_sdash: 'Tổng quan', sd_title: 'Xem nhanh học viên', sd_sub: 'Xem tình hình kiểm tra, học tập, đi học trên một màn hình.', sd_switch: 'Chuyển học viên',
+  sd_before: 'Trước khi kiểm tra', sd_after: 'Sau khi phân tích', sd_before_empty: 'Điền phiếu tư vấn hoặc bản chẩn đoán thì sẽ hiện ở đây.', sd_after_empty: 'Sau khi làm bài kiểm tra, nội dung phân tích sẽ hiện ở đây.',
+  sd_progress: 'Tiến độ', sd_sdl: 'Tự học {n}/5', sd_no_test: 'Chưa kiểm tra', sd_week: 'Điểm danh tuần này', sd_att_n: '{n} bản ghi', sd_status: 'Trạng thái', sd_reasons: '{n} lý do cần xem', sd_no_reason: 'Không có gì đặc biệt',
+  sd_pace_ok: 'Đang đi đúng hướng so với mục tiêu. Hãy giữ nhịp hiện tại.', sd_pace_slow: 'Tiến độ chậm so với thời gian còn lại. Hãy thu gọn ưu tiên tuần này để tập trung.', sd_pace_over: 'Đã qua ngày mục tiêu. Hãy xem lại kết quả và đặt mục tiêu mới.',
+  sd_peer: 'So sánh trung bình', sd_peer_avg: 'Trung bình {n} học viên cùng nhóm: {v}', sd_test_avg: 'Điểm kiểm tra trung bình', sd_peer_few: 'Chưa đủ học viên để so sánh (hiện {n}). Cần từ 2 học viên cùng lớp hoặc cùng loại mục tiêu.',
+  sd_model: 'Chỉ số vận hành', sd_week_time: 'Thời gian học 7 ngày', sd_visits7: 'Số lần vào 7 ngày', sd_plan_rate: 'Tỷ lệ thực hiện kế hoạch tuần', sd_sessions: 'Số buổi tư vấn', sd_diag_rounds: 'Số lần chẩn đoán', sd_goal_prep: 'Đến ngày mục tiêu',
+  sd_trend: 'Thời gian học theo tuần', sd_trend_help: 'Số giờ học mỗi tuần trong 8 tuần gần nhất.', sd_shortcuts: 'Lối tắt',
+});

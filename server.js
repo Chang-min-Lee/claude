@@ -328,7 +328,7 @@ function summarize(u, todayStr, viewer) {
     validityTests: Object.entries(deep).filter(([, r]) => r.v?.length).map(([id]) => id),
     status: !snoozed && (idle || validity || wellbeing || lowAtt) ? 'watch' : 'ok',
     inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', passEnd: d.profile?.passEnd || '', todayMin: (d.log || {})[todayStr] || 0,
-    className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
+    orgType: d.profile?.orgType || '', className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
   };
 }
 

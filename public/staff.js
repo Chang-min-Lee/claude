@@ -10,7 +10,7 @@ async function openStudent(id, tab) {
     state.ro = !r.canWrite; state.diagRound = undefined;
     if (!state.profile) state.profile = newProfile(r.user.name);
     state.profile.services = state.profile.services || { study: true, career: true };
-    state.tab = state.ro ? 'report' : (tab || 'home'); state.sub = { plan: 'schedule', report: state.ro ? 'parent' : 'comp' }; tv = freshTv();
+    state.tab = state.ro ? 'report' : (tab || 'sdash'); state.sub = { plan: 'schedule', report: state.ro ? 'parent' : 'comp' }; tv = freshTv();
     render(); scrollTo(0, 0);
   } catch (e) { state.notice = e.message; render(); }
 }
@@ -44,7 +44,7 @@ function interventions(l) {
   const out = [], nm = l.name;
   if (l.flags.wellbeing) out.push({ k: 'wb', sev: 4, tab: 'counsel', why: t('iv_wb_why'), todo: t('iv_wb_todo'), tpl: t('iv_wb_tpl', { name: nm }) });
   if (l.awaiting) out.push({ k: 'msg', sev: 3, tab: 'messages', why: t('iv_msg_why'), todo: t('iv_msg_todo'), tpl: '' });
-  if (l.flags.idle && !l.snoozed) out.push({ k: 'idle', sev: 3, tab: 'home', why: t('iv_idle_why', { n: l.idleDays ?? '?' }), todo: t('iv_idle_todo'), tpl: t('iv_idle_tpl', { name: nm }) });
+  if (l.flags.idle && !l.snoozed) out.push({ k: 'idle', sev: 3, tab: 'sdash', why: t('iv_idle_why', { n: l.idleDays ?? '?' }), todo: t('iv_idle_todo'), tpl: t('iv_idle_tpl', { name: nm }) });
   if (l.flags.lowAtt && !l.snoozed) out.push({ k: 'att', sev: 2, tab: 'input', why: t('iv_att_why', { rate: l.attRate ?? '?' }), todo: t('iv_att_todo'), tpl: t('iv_att_tpl', { name: nm }) });
   if (l.flags.validity && !l.snoozed) out.push({ k: 'val', sev: 2, tab: 'tests', why: t('iv_val_why', { tests: (l.validityTests || []).map((id) => tx(id).name).join(', ') }), todo: t('iv_val_todo'), tpl: t('iv_val_tpl', { name: nm }) });
   if (l.flags.ddaySoon) out.push({ k: 'dday', sev: 1, tab: 'input', why: t('iv_dday_why', { n: l.goal.dday, label: l.goal.label || t('goal_title') }), todo: t('iv_dday_todo'), tpl: t('iv_dday_tpl', { name: nm, label: l.goal.label || t('goal_title'), n: l.goal.dday }) });
@@ -87,7 +87,7 @@ function renderRoster(app) {
   const admin = roleOf() === 'admin', q = roster.q.trim().toLowerCase();
   const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l) && (!roster.cls || (l.className || '') === (roster.cls === '_none' ? '' : roster.cls)) && (roster.left || l.enroll !== 'left'));
   const watchN = roster.learners.filter((l) => l.status === 'watch').length;
-  app.innerHTML = `${roster.learners.length ? `${ivCard()}<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><h2>${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2>
+  app.innerHTML = `${roster.learners.length ? `${ivCard()}<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2><button class="primary" id="goreg">＋ ${t('tab_register')}</button></div>
       <div class="row"><input type="text" id="rq" placeholder="${t('roster_search')}" value="${esc(roster.q)}">
         ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
       <div class="row"><select id="rcls"><option value="">${t('cls_all')}</option>${[...new Set(roster.learners.map((l) => l.className || ''))].filter((n) => n).sort().map((n) => `<option value="${esc(n)}" ${roster.cls === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rleft" ${roster.left ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cls_show_left')}</span></label></div>
@@ -108,6 +108,7 @@ function renderRoster(app) {
   $('#rcls').onchange = (e) => { roster.cls = e.target.value; render(); };
   $('#rleft').onchange = (e) => { roster.left = e.target.checked; render(); };
   $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
+  $('#goreg').onclick = () => { state.tab = 'register'; render(); scrollTo(0, 0); };
   bindIv(app);
   app.querySelectorAll('[data-qs]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.qs; render(); }));
   app.querySelectorAll('[data-flag]').forEach((b) => (b.onclick = () => { if (b.dataset.flag === 'watch') { roster.watch = !roster.watch; } else roster.flag = roster.flag === b.dataset.flag ? '' : b.dataset.flag; render(); }));
@@ -136,7 +137,7 @@ let reg = { result: null, msg: '' };
 function renderRegister(app) {
   const admin = roleOf() === 'admin';
   if (admin && !roster.loaded && !roster.loading) loadRoster();
-  app.innerHTML = `<div class="card"><h2>${t('reg_title')}</h2><p class="sub">${t('reg_desc')}</p>
+  app.innerHTML = `<button id="regback">← ${t('tab_roster')}</button><div class="card"><h2>${t('reg_title')}</h2><p class="sub">${t('reg_desc')}</p>
       <input type="text" id="rname" maxlength="20" placeholder="${t('reg_name')}">
       <div class="row"><select id="rgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${k === 'high' ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select></div>
       <div class="row"><input type="text" id="rschool" maxlength="40" placeholder="${t('reg_school')}"></div>
@@ -162,6 +163,7 @@ function renderRegister(app) {
       reg = { result: { id: r.id, name, shareCode: r.shareCode }, msg: '' }; roster.loaded = false; render();
     } catch (e) { $('#rmsg').textContent = e.message; $('#rsubmit').disabled = false; }
   };
+  $('#regback').onclick = () => { state.tab = 'roster'; roster.loaded = false; render(); };
   if ($('#ropen')) $('#ropen').onclick = () => openStudent(reg.result.id, 'input');
   if ($('#rlist')) $('#rlist').onclick = () => { reg.result = null; state.tab = 'roster'; render(); };
   const parseBulk = () => $('#bulk').value.split(/\r?\n/).map((l) => l.split(/[,\t]/).map((x) => x.trim())).filter((c) => c[0]).map((c) => ({ name: c[0].slice(0, 20), group: Object.keys(GROUPS).includes(c[1]) ? c[1] : 'high', school: c[2] || '', goalLabel: c[3] || '', goalDate: /^\d{4}-\d{2}-\d{2}$/.test(c[4] || '') ? c[4] : '' })).slice(0, 200);
