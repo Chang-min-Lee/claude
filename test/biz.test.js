@@ -162,3 +162,22 @@ test('베타: 의견함(익명 가능·관리자만 읽기), 백업 내려받기
   assert.equal(r.status, 200); assert.match(r.headers.get('content-disposition'), /jinro-backup-\d{4}-\d{2}-\d{2}\.(sqlite|json)/);
   const buf = Buffer.from(await r.arrayBuffer()); assert.ok(buf.length > 1000);
 });
+
+test('강의 카탈로그: 강사·관리자만 등록, 링크·태그 검증, 작성자/관리자만 수정·삭제', async () => {
+  assert.equal((await get('/api/courses')).status, 401);
+  assert.equal((await post('/api/courses', { title: 'x' })).status, 401);
+  const me2 = await post('/api/signup', { email: 'c1@x.co', password: 'password12', name: '학생2', role: 'learner' });
+  assert.equal((await post('/api/courses', { title: 'x' }, me2.token)).status, 403); // 학생은 등록 불가
+  assert.equal((await get('/api/courses', me2.token)).status, 200); // 학생도 읽기는 가능
+  assert.equal((await post('/api/courses', { title: '  ' }, S.t1)).status, 400);
+  const a = await post('/api/courses', { title: '수학 개념 완성', platform: '예시사이트', url: 'javascript:alert(1)', subjects: ['수학', '', '영어'], groups: ['high', 'bogus'], tags: ['concept', 'managed', 'evil'], note: 'n'.repeat(500) }, S.t1);
+  assert.equal(a.status, 200); const c = a.course;
+  assert.equal(c.url, ''); assert.deepEqual(c.subjects, ['수학', '영어']); assert.deepEqual(c.groups, ['high']); assert.deepEqual(c.tags, ['concept', 'managed']); assert.equal(c.note.length, 200);
+  const ok = await post('/api/courses', { title: '영어 듣기', url: 'https://example.com/a?b=1', tags: ['short'] }, S.t1); assert.equal(ok.course.url, 'https://example.com/a?b=1');
+  assert.equal((await post('/api/courses', { id: c.id, title: '남이 수정' }, S.t2)).status, 403); // 다른 강사는 수정 불가
+  const up = await post('/api/courses', { id: c.id, title: '수학 개념 완성 v2', tags: ['concept'] }, S.admin); assert.equal(up.course.title, '수학 개념 완성 v2'); assert.equal(up.course.by, c.by); // 관리자는 수정 가능, 작성자 유지
+  assert.equal((await get('/api/courses', S.t2)).courses.length, 2);
+  assert.equal((await del(`/api/courses/${c.id}`, S.t2)).status, 403);
+  assert.equal((await del(`/api/courses/${c.id}`, S.t1)).courses.length, 1);
+  assert.equal((await del('/api/courses/nope', S.t1)).status, 404);
+});

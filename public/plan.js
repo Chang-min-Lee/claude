@@ -15,9 +15,9 @@ function subnav(tab, ids) {
 function bindSubnav(app, tab) { app.querySelectorAll('[data-sub]').forEach((b) => (b.onclick = () => { state.sub[tab] = b.dataset.sub; render(); })); }
 
 function renderPlan(app) {
-  app.innerHTML = subnav('plan', ['schedule', 'weekplan', 'goal', 'grades']) + '<div id="planbody"></div>';
+  app.innerHTML = subnav('plan', ['schedule', 'weekplan', 'goal', 'grades', 'courses']) + '<div id="planbody"></div>';
   bindSubnav(app, 'plan');
-  ({ schedule: schedView, weekplan: weekplanView, goal: goalView, grades: gradesView }[state.sub.plan] || schedView)($('#planbody'));
+  ({ schedule: schedView, weekplan: weekplanView, goal: goalView, grades: gradesView, courses: (el) => coursesView(el, isStaffView() && !!state.viewAs) }[state.sub.plan] || schedView)($('#planbody'));
 }
 
 // ---------- 주간 시간표 ----------

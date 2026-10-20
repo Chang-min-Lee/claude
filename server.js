@@ -12,7 +12,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const { sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, STAFF_KEYS, ATT, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
+const { sanitizeCourse, sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, STAFF_KEYS, ATT, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -389,6 +389,20 @@ const routes = {
     const t = teacherOf(l.id);
     return { name: l.name, data: d, teacher: t ? t.name : '', org: orgSettings() };
   },
+  // 강의(인강) 카탈로그: 로그인한 누구나 읽고, 강사·관리자가 추가한다. 학습 유형 추천에 쓰인다.
+  'GET /api/courses': async (req) => { needUser(req); return { courses: db.kv.courses || [] }; },
+  'POST /api/courses': async (req) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    limit('course:' + u.id, 60, 10 * 60000);
+    const b = await readBody(req), c = sanitizeCourse(b);
+    if (!c.title) throw new HttpError(400, 'noNote');
+    const list = db.kv.courses || [], old = b.id && list.find((x) => x.id === b.id);
+    if (old && !(u.role === 'admin' || old.by === u.id)) throw new HttpError(403, 'forbidden');
+    const item = { ...c, id: old ? old.id : crypto.randomUUID(), by: old ? old.by : u.id, byName: old ? old.byName : u.name, at: old ? old.at : new Date().toISOString() };
+    db.kv.courses = (old ? list.map((x) => (x.id === old.id ? item : x)) : [...list, item]).slice(-300);
+    store.saveKv('courses', db.kv.courses);
+    return { course: item, courses: db.kv.courses };
+  },
   // 베타 의견: 로그인하지 않아도 보낼 수 있고, 관리자만 읽는다.
   'POST /api/feedback': async (req) => {
     limit('fb:' + ip(req), 20, 10 * 60000);
@@ -643,6 +657,13 @@ const routes = {
 // ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
 const paramRoutes = [
   // 개입 안내 보류: 강사가 "확인했어요"를 누르면 며칠간 '확인 필요'에서 뺀다 (days 0 이면 해제)
+  ['DELETE', /^\/api\/courses\/([\w-]+)$/, async (req, url, [id]) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const c = (db.kv.courses || []).find((x) => x.id === id); if (!c) throw new HttpError(404, 'notFound');
+    if (!(u.role === 'admin' || c.by === u.id)) throw new HttpError(403, 'forbidden');
+    db.kv.courses = db.kv.courses.filter((x) => x.id !== id); store.saveKv('courses', db.kv.courses);
+    return { courses: db.kv.courses };
+  }],
   ['POST', /^\/api\/feedback\/([\w-]+)\/done$/, async (req, url, [id]) => { // 처리 완료 표시 토글 (관리자)
     const u = needUser(req); if (u.role !== 'admin') throw new HttpError(403, 'forbidden');
     const f = (db.kv.feedback || []).find((x) => x.id === id); if (!f) throw new HttpError(404, 'notFound');

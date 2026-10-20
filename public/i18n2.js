@@ -354,3 +354,35 @@ Object.assign(UI.vi, {
   sd_model: 'Chỉ số vận hành', sd_week_time: 'Thời gian học 7 ngày', sd_visits7: 'Số lần vào 7 ngày', sd_plan_rate: 'Tỷ lệ thực hiện kế hoạch tuần', sd_sessions: 'Số buổi tư vấn', sd_diag_rounds: 'Số lần chẩn đoán', sd_goal_prep: 'Đến ngày mục tiêu',
   sd_trend: 'Thời gian học theo tuần', sd_trend_help: 'Số giờ học mỗi tuần trong 8 tuần gần nhất.', sd_shortcuts: 'Lối tắt',
 });
+
+// 학습 유형별 강의(인강) 추천
+Object.assign(UI.ko, {
+  sub_courses: '강의 추천',
+  ct_managed: '관리형', ct_selfdriven: '자기주도형', ct_short: '짧은 단위', ct_long: '긴 호흡', ct_visual: '시각·도식형', ct_concept: '개념·원리형', ct_story: '설명·이야기형', ct_live: '라이브·소통형', ct_solo: '혼자 학습형', ct_gentle: '부담 적은 단계형', ct_intensive: '집중 심화형',
+  crs_type_title: '학습 유형', crs_type_help: '검사 결과로 읽은 학습 스타일이에요. 진단이 아니라 강의를 고를 때 참고하는 기준이에요.', crs_need_tests: '자기주도학습·성격·학습역량 검사를 하면 학습 유형이 나와요.', crs_no_type: '뚜렷하게 치우친 유형은 없어요. 과목과 목표에 맞춰 고르면 돼요.',
+  crs_why_managed: '자기주도학습 {n}/5 — 계획·진도 관리가 있는 강의가 잘 맞아요.', crs_why_selfdriven: '자기주도학습 {n}/5 — 혼자 계획해서 골라 들어도 잘 이어갈 수 있어요.', crs_why_short_persist: '지속력 {n}/5 — 10~20분 단위로 끊어 듣는 강의가 좋아요.', crs_why_short_c: '성실성 {n}/5 — 짧게 나눠진 강의와 체크 장치가 도움이 돼요.',
+  crs_why_short_age: '저학년은 집중 시간이 짧아서 짧은 강의가 알맞아요.', crs_why_long: '지속력 {n}/5 — 긴 호흡의 심화 강의도 소화할 수 있어요.', crs_why_live_e: '외향성 {n}/5 — 질문하고 함께 듣는 라이브·소통형이 잘 맞아요.', crs_why_live_s: '대인 영역 {n}/5 — 함께 배우는 소통형 강의가 도움이 돼요.',
+  crs_why_solo: '외향성 {n}/5 — 혼자 조용히 듣는 온디맨드 강의가 편해요.', crs_why_gentle: '정서안정성 {n}/5 — 진도 압박이 적고 단계가 완만한 강의가 좋아요.', crs_why_visual: '공간지각 {n}/5 — 도식·그림·판서가 풍부한 강의가 이해에 좋아요.', crs_why_story: '언어 영역 {n}/5 — 설명과 이야기로 풀어 주는 강의가 잘 맞아요.', crs_why_concept: '논리·수리 영역 {n}/5 — 원리를 짚어 주는 개념 강의가 잘 맞아요.',
+  crs_criteria: '강의 고를 때 확인할 것',
+  crs_tip_managed: '진도표·과제·출석 체크가 있는지, 선생님이나 멘토가 진도를 확인해 주는지 보세요.', crs_tip_selfdriven: '교재와 목차가 분명한 단과 강의를 골라 스스로 일정을 짜 보세요. 주 단위 목표를 정해 두면 좋아요.', crs_tip_short: '한 강의가 20분 안팎인지, 되돌려 듣기·요약 기능이 있는지 확인하세요. 하루 2~3개씩 나눠 들으세요.',
+  crs_tip_long: '한 번에 몰입해서 듣는 심화·완성 과정이 맞아요. 들은 뒤 문제 풀이 시간을 꼭 붙이세요.', crs_tip_visual: '판서·도식·영상 자료가 풍부한지 샘플 강의를 먼저 보세요.', crs_tip_concept: '공식을 외우기보다 이유를 설명해 주는 강의인지 샘플로 확인하세요.',
+  crs_tip_story: '설명이 이야기처럼 이어지는지, 필기 요약본이 있는지 확인하세요.', crs_tip_live: '질문할 수 있는 라이브나 소그룹 스터디가 있는 과정을 우선 보세요.', crs_tip_solo: '완전 온디맨드(언제든 혼자 듣기)이고 배속·반복 기능이 있는 서비스가 편해요.', crs_tip_gentle: '진도 압박이 없고 쉬운 단계부터 시작하는 과정을 고르세요. 처음엔 주 2~3회만 시작해도 충분해요.', crs_tip_intensive: '기간이 정해진 집중 과정으로 목표일에 맞춰 설계하세요.',
+  crs_rec_title: '추천 강의', crs_subject_help: '과목을 고르면 그 과목 강의가 먼저 나와요. (성적이 낮은 과목이 앞에 있어요)', crs_seed: '기본 예시', crs_open: '열기', crs_to_task: '할 일로 추가', crs_none: '조건에 맞는 강의가 없어요. 아래에서 기관의 추천 강의를 등록해 보세요.',
+  crs_disclaimer: '※ 강의 내용·가격·강사는 자주 바뀌어요. 수강하기 전에 샘플 강의와 최신 정보를 직접 확인하세요. 이 목록은 광고가 아니에요.', crs_task: '{t} 수강하기', crs_added: '할 일에 추가했어요.',
+  crs_manage: '강의 등록·관리', crs_manage_help: '기관이 추천하는 강의를 등록해 두면 학생마다 학습 유형에 맞춰 자동으로 골라 줘요. 학습 유형 태그를 최대한 정확히 골라 주세요.', crs_f_title: '강의/강좌 이름', crs_f_platform: '제공처(사이트·학원 이름)', crs_f_subjects: '과목 (쉼표로 구분, 예: 수학, 영어)', crs_f_groups: '대상 학년', crs_f_tags: '이 강의에 맞는 학습 유형', crs_f_note: '메모 (특징·주의점)', crs_need_title: '강의 이름을 입력해 주세요.', crs_mine: '등록한 강의',
+});
+Object.assign(UI.vi, {
+  sub_courses: 'Gợi ý khóa học',
+  ct_managed: 'Có quản lý', ct_selfdriven: 'Tự học', ct_short: 'Bài ngắn', ct_long: 'Bài dài', ct_visual: 'Hình ảnh/sơ đồ', ct_concept: 'Nguyên lý', ct_story: 'Kể chuyện', ct_live: 'Trực tuyến tương tác', ct_solo: 'Học một mình', ct_gentle: 'Nhẹ nhàng', ct_intensive: 'Chuyên sâu',
+  crs_type_title: 'Kiểu học', crs_type_help: 'Phong cách học đọc từ kết quả kiểm tra. Đây không phải chẩn đoán mà là tiêu chí tham khảo khi chọn khóa học.', crs_need_tests: 'Làm bài kiểm tra tự học, tính cách, năng lực học tập để biết kiểu học.', crs_no_type: 'Không có kiểu nào nổi bật. Hãy chọn theo môn học và mục tiêu.',
+  crs_why_managed: 'Tự học {n}/5 — hợp với khóa có quản lý kế hoạch và tiến độ.', crs_why_selfdriven: 'Tự học {n}/5 — có thể tự lên kế hoạch và chọn khóa để học.', crs_why_short_persist: 'Sức bền {n}/5 — nên chọn bài giảng chia nhỏ 10–20 phút.', crs_why_short_c: 'Tính chu đáo {n}/5 — bài ngắn và có công cụ kiểm tra sẽ giúp ích.',
+  crs_why_short_age: 'Học sinh nhỏ khó tập trung lâu nên hợp bài giảng ngắn.', crs_why_long: 'Sức bền {n}/5 — có thể theo được khóa dài, chuyên sâu.', crs_why_live_e: 'Hướng ngoại {n}/5 — hợp lớp trực tuyến có thể hỏi đáp.', crs_why_live_s: 'Giao tiếp {n}/5 — khóa học cùng nhau, tương tác sẽ giúp ích.',
+  crs_why_solo: 'Hướng ngoại {n}/5 — thoải mái với bài giảng xem một mình, học bất cứ lúc nào.', crs_why_gentle: 'Ổn định cảm xúc {n}/5 — nên chọn khóa ít áp lực tiến độ, các bước thoải mái.', crs_why_visual: 'Không gian {n}/5 — nên chọn bài giảng nhiều sơ đồ, hình vẽ.', crs_why_story: 'Ngôn ngữ {n}/5 — hợp bài giảng giải thích như kể chuyện.', crs_why_concept: 'Logic/toán {n}/5 — hợp bài giảng chỉ ra nguyên lý.',
+  crs_criteria: 'Cần kiểm tra khi chọn khóa học',
+  crs_tip_managed: 'Xem có lịch tiến độ, bài tập, điểm danh và người kiểm tra tiến độ hay không.', crs_tip_selfdriven: 'Chọn khóa lẻ có giáo trình, mục lục rõ ràng và tự xếp lịch. Đặt mục tiêu theo tuần.', crs_tip_short: 'Mỗi bài khoảng 20 phút, có tính năng xem lại/tóm tắt. Mỗi ngày học 2–3 bài.',
+  crs_tip_long: 'Hợp khóa chuyên sâu, học liền mạch. Luôn dành thời gian làm bài tập sau khi học.', crs_tip_visual: 'Xem bài mẫu trước để biết có nhiều bảng, sơ đồ, video không.', crs_tip_concept: 'Xem bài mẫu xem có giải thích lý do thay vì bắt học thuộc công thức không.',
+  crs_tip_story: 'Xem lời giảng có mạch lạc như kể chuyện và có tóm tắt ghi chú không.', crs_tip_live: 'Ưu tiên khóa có lớp trực tuyến hỏi đáp hoặc nhóm học nhỏ.', crs_tip_solo: 'Ưu tiên dịch vụ học theo yêu cầu hoàn toàn, có tăng tốc và lặp lại.', crs_tip_gentle: 'Chọn khóa ít áp lực, bắt đầu từ bước dễ. Lúc đầu chỉ cần 2–3 buổi mỗi tuần.', crs_tip_intensive: 'Chọn khóa tập trung có thời hạn, thiết kế theo ngày mục tiêu.',
+  crs_rec_title: 'Khóa học gợi ý', crs_subject_help: 'Chọn môn để ưu tiên các khóa của môn đó. (Môn điểm thấp nằm trước)', crs_seed: 'Ví dụ mặc định', crs_open: 'Mở', crs_to_task: 'Thêm vào việc cần làm', crs_none: 'Không có khóa phù hợp. Hãy đăng ký khóa học do đơn vị đề xuất ở bên dưới.',
+  crs_disclaimer: '※ Nội dung, học phí, giảng viên thay đổi thường xuyên. Hãy xem bài mẫu và thông tin mới nhất trước khi đăng ký. Danh sách này không phải quảng cáo.', crs_task: 'Học {t}', crs_added: 'Đã thêm vào việc cần làm.',
+  crs_manage: 'Đăng ký/quản lý khóa học', crs_manage_help: 'Đăng ký các khóa học đơn vị đề xuất thì hệ thống sẽ tự chọn theo kiểu học của từng học viên. Hãy chọn đúng thẻ kiểu học.', crs_f_title: 'Tên khóa học', crs_f_platform: 'Nơi cung cấp (website/trung tâm)', crs_f_subjects: 'Môn học (cách nhau bằng dấu phẩy, VD: Toán, Anh)', crs_f_groups: 'Đối tượng', crs_f_tags: 'Kiểu học phù hợp với khóa này', crs_f_note: 'Ghi chú (đặc điểm, lưu ý)', crs_need_title: 'Vui lòng nhập tên khóa học.', crs_mine: 'Khóa học đã đăng ký',
+});

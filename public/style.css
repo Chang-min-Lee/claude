@@ -244,3 +244,5 @@ a { color:var(--main-strong); } a:hover { color:var(--main); }
 svg.trend { width:100%; max-width:520px; height:auto; } svg.trend rect { fill:var(--main2); } svg.trend rect.cur { fill:var(--main); } svg.trend text { font-size:9px; fill:var(--sub); } svg.trend text.v { font-weight:700; fill:var(--ink); }
 @media (max-width:860px) { .tiles4 { grid-template-columns:repeat(2,1fr); } .beforeafter { grid-template-columns:1fr; } .beforeafter .arr { display:none; } .viewas select { min-width:0; flex:1; } }
 .ddband .d { white-space:nowrap; } svg.trend text { font-size:11px; }
+.chips { display:flex; flex-wrap:wrap; gap:6px; margin:8px 0; } .chipbtn { display:inline-flex; align-items:center; gap:6px; padding:5px 12px; border-radius:999px; border:1px solid var(--line-2); background:var(--surface); font-weight:600; font-size:.88rem; cursor:pointer; }
+.chipbtn.on { background:var(--main); color:var(--on-main); border-color:var(--main); } a.btnlink { display:inline-block; padding:7px 14px; border:1px solid var(--line-2); border-radius:999px; font-weight:600; text-decoration:none; }
