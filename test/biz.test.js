@@ -181,3 +181,12 @@ test('강의 카탈로그: 강사·관리자만 등록, 링크·태그 검증, �
   assert.equal((await del(`/api/courses/${c.id}`, S.t1)).courses.length, 1);
   assert.equal((await del('/api/courses/nope', S.t1)).status, 404);
 });
+
+test('AI 수강 학습법: 정상 응답 정리, 키 없음/파싱 실패/잘못된 요청', async () => {
+  const body = { group: 'high', tags: [{ k: 'short', label: '짧은 단위', why: '지속력 2.5/5' }, { label: '관리형' }], subjects: ['수학'], goal: '모의고사', dday: 30 };
+  mockReply = '{"summary":"요약","how":["a","b","<b>c</b>"],"week":["월: 1강"],"pitfalls":["몰아듣기"],"extra":"무시"}';
+  const r = await post('/api/courseguide', body); assert.equal(r.status, 200); assert.equal(r.guide.how.length, 3); assert.equal(r.guide.extra, undefined); assert.equal(r.guide.pitfalls[0], '몰아듣기');
+  mockReply = '{"summary":"","how":[]}'; assert.equal((await post('/api/courseguide', body)).status, 502);
+  mockReply = 'not json'; assert.equal((await post('/api/courseguide', body)).status, 502);
+  assert.equal((await post('/api/courseguide', { group: 'high', tags: [] })).status, 400);
+});

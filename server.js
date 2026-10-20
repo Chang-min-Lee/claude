@@ -50,6 +50,7 @@ const M = {
     badEmail: '올바른 이메일을 입력해 주세요.', pwShort: '비밀번호는 8자 이상이어야 해요.', nameReq: '이름을 입력해 주세요.', emailTaken: '이미 가입된 이메일이에요.', badCred: '이메일 또는 비밀번호가 맞지 않아요.',
     learnerOnly: '학습자 계정만 저장할 수 있어요.', guardianOnlyLink: '보호자/교사 계정만 연결할 수 있어요.', codeNotFound: '연결 코드를 찾을 수 없어요.', guardianOnly: '보호자/교사 전용이에요.',
     curPwBad: '현재 비밀번호가 맞지 않아요.', newPwShort: '새 비밀번호는 8자 이상이어야 해요.', pwBad: '비밀번호가 맞지 않아요.', msgReq: '메시지가 필요합니다.', serverErr: '서버 오류가 발생했어요.',
+    guideNeedKey: 'AI 수강 학습법은 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (위의 유형별 확인 항목은 키 없이도 볼 수 있어요.)',
     detailNeedKey: 'AI 상세 해석은 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (위의 기본 해석은 키 없이도 볼 수 있어요.)',
     diagNeedKey: 'AI 진단서는 서버에 ANTHROPIC_API_KEY 설정이 필요해요. (아래의 기본 해석은 키 없이도 볼 수 있어요.)', forbidden: '접근 권한이 없어요.', notFound: '찾을 수 없어요.', staffOnly: '강사/관리자 전용이에요.', adminOnly: '관리자 전용이에요.',
     lastAdmin: '마지막 남은 관리자 계정은 변경하거나 삭제할 수 없어요.', roleBad: '역할이 올바르지 않아요.', notManaged: '강사가 등록한 학생만 활성화할 수 있어요.', dataTooBig: '저장할 데이터가 너무 커요.', selfDelete: '내 계정은 여기서 삭제할 수 없어요. 계정 탭을 이용해 주세요.',
@@ -65,6 +66,7 @@ const M = {
     badEmail: 'Vui lòng nhập email hợp lệ.', pwShort: 'Mật khẩu phải có ít nhất 8 ký tự.', nameReq: 'Vui lòng nhập tên.', emailTaken: 'Email này đã được đăng ký.', badCred: 'Email hoặc mật khẩu không đúng.',
     learnerOnly: 'Chỉ tài khoản người học mới có thể lưu dữ liệu.', guardianOnlyLink: 'Chỉ tài khoản phụ huynh/giáo viên mới có thể kết nối.', codeNotFound: 'Không tìm thấy mã kết nối.', guardianOnly: 'Chỉ dành cho phụ huynh/giáo viên.',
     curPwBad: 'Mật khẩu hiện tại không đúng.', newPwShort: 'Mật khẩu mới phải có ít nhất 8 ký tự.', pwBad: 'Mật khẩu không đúng.', msgReq: 'Cần có tin nhắn.', serverErr: 'Đã xảy ra lỗi máy chủ.',
+    guideNeedKey: 'Hướng dẫn cách học bằng AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Các mục kiểm tra theo kiểu học ở trên vẫn xem được.)',
     detailNeedKey: 'Phần diễn giải AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản ở trên vẫn xem được.)',
     diagNeedKey: 'Bản chẩn đoán AI cần cài đặt ANTHROPIC_API_KEY trên máy chủ. (Phần diễn giải cơ bản bên dưới vẫn xem được khi không có khóa.)', forbidden: 'Bạn không có quyền truy cập.', notFound: 'Không tìm thấy.', staffOnly: 'Chỉ dành cho giáo viên/quản trị viên.', adminOnly: 'Chỉ dành cho quản trị viên.',
     lastAdmin: 'Không thể thay đổi hoặc xóa tài khoản quản trị viên cuối cùng.', roleBad: 'Vai trò không hợp lệ.', notManaged: 'Chỉ học viên do giáo viên đăng ký mới có thể kích hoạt.', dataTooBig: 'Dữ liệu cần lưu quá lớn.', selfDelete: 'Không thể xóa tài khoản của chính bạn ở đây. Hãy dùng tab Tài khoản.',
@@ -648,6 +650,7 @@ const routes = {
     return { accounts: Object.values(db.users).filter((x) => x.email && (x.email.includes(q) || String(x.name).toLowerCase().includes(q))).slice(0, 20).map((x) => ({ id: x.id, name: x.name, email: x.email, role: x.role })) };
   },
   'POST /api/schedule': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeSchedule(await readBody(req), langOf(req)); },
+  'POST /api/courseguide': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeCourseGuide(await readBody(req), langOf(req)); },
   'POST /api/testdetail': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return aiMod.makeTestDetail(await readBody(req), langOf(req)); },
   'POST /api/diagnosis': async (req) => { limit('ai:' + ip(req), 20, 10 * 60000); return aiMod.makeDiagnosis(await readBody(req), langOf(req)); },
   'POST /api/plan': async (req) => { limit('ai:' + ip(req), 30, 10 * 60000); return makePlan(await readBody(req), langOf(req)); },
