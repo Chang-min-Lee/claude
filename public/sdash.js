@@ -38,7 +38,7 @@ function renderSdash(app) {
   const me = rosterOf(state.viewAs.id), p = state.profile, n = ddayOf(state.goal.date), prog = progressPct(), inten = intensityOf(), it = interpret();
   const org = p.orgType, chips = [
     `<span class="tag strong">${t('gt_' + state.goal.type)}</span>`, org ? `<span class="tag">${t('ot_' + org)}</span>` : '', p.className ? `<span class="tag">${esc(p.className)}</span>` : '',
-    p.seat ? `<span class="tag">${t('cafe_seat')} ${esc(p.seat)}</span>` : '', (p.services || {}).study !== false ? `<span class="tag">✓ ${t('svc_study')}</span>` : '', (p.services || {}).career !== false ? `<span class="tag">✓ ${t('svc_career')}</span>` : '',
+    p.seat ? `<span class="tag">${t('cafe_seat')} ${esc(p.seat)}</span>` : '', p.endDate ? `<span class="tag ${p.endDate && daysUntil(p.endDate) <= 7 ? 'weak' : ''}">${t('per_end')} ${esc(p.endDate)} · ${periodHint(p.endDate)}</span>` : '', (p.services || {}).study !== false ? `<span class="tag">✓ ${t('svc_study')}</span>` : '', (p.services || {}).career !== false ? `<span class="tag">✓ ${t('svc_career')}</span>` : '',
   ].join('');
   // 검사 전 → 분석 이후
   const before = state.diag.before || state.intake.concern || '', after = state.diag.insight || (state.diag.overall || '').slice(0, 300) || [...it.interest, ...it.style, ...it.ability].join(' ');
@@ -47,7 +47,7 @@ function renderSdash(app) {
   const cmp = me ? peerCompare(me) : null;
   const a30 = attStats(state.attendance, 30);
   // 운영 모델별 지표
-  const week = weekMinutes(), visits7 = state.visits.filter((v) => v.date >= dk(new Date(Date.now() - 6 * 86400000))).length, left = passLeft(p.passEnd);
+  const week = weekMinutes(), visits7 = state.visits.filter((v) => v.date >= dk(new Date(Date.now() - 6 * 86400000))).length, left = passLeft(p.endDate);
   const modelBox = org === 'studycafe' ? `<div class="kv"><span>${t('sd_week_time')}</span><b>${unit('unit_min', week)}</b></div><div class="kv"><span>${t('sd_visits7')}</span><b>${visits7}</b></div><div class="kv"><span>${t('cafe_pass')}</span><b>${left === null ? '-' : left < 0 ? t('cafe_pass_expired') : t('cafe_pass_left', { n: left })}</b></div>`
     : org === 'studyroom' ? `<div class="kv"><span>${t('sd_plan_rate')}</span><b>${planPct() === null ? '-' : planPct() + '%'}</b></div><div class="kv"><span>${t('rep_checkin_lbl')}</span><b>${checkinsThisWeek()}</b></div><div class="kv"><span>${t('sd_week_time')}</span><b>${unit('unit_min', week)}</b></div>`
     : org === 'consultant' ? `<div class="kv"><span>${t('sd_sessions')}</span><b>${state.counsel.length}</b></div><div class="kv"><span>${t('ns_label')}</span><b>${esc(p.nextSession || '-')}</b></div><div class="kv"><span>${t('sd_diag_rounds')}</span><b>${diagRounds().length}</b></div>`

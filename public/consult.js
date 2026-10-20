@@ -17,6 +17,13 @@ function nextSessionCard() {
   return `<div class="card callout"><h2>📅 ${t('ns_title')}</h2><p><b>${esc(d)}</b> · ${n === 0 ? t('ns_today') : t('ns_in', { n })}</p></div>`;
 }
 
+// 학생 홈: 종료일 7일 전부터 안내
+function endNoticeCard() {
+  const e = state.profile?.endDate; if (!e || (state.profile.status || 'active') !== 'active') return '';
+  const n = daysUntil(e); if (n > 7) return '';
+  return `<div class="card callout warn"><h2>⏳ ${t('end_notice_t')}</h2><p>${n < 0 ? t('end_notice_over', { d: esc(e) }) : n === 0 ? t('end_notice_today') : t('end_notice', { n, d: esc(e) })}</p></div>`;
+}
+
 // ---------- 초기 상담 문진 ----------
 const INTAKE_FIELDS = ['concern', 'goal', 'strengths', 'interests', 'habits', 'background'];
 function intakeCard(el) {
@@ -146,7 +153,7 @@ const passLeft = (end) => (end ? daysUntil(end) : null);
 // 학생 홈: 입실/퇴실 (스터디카페 이용자 또는 이미 기록이 있는 학생)
 function visitCard() {
   if (state.viewAs || !(state.profile?.orgType === 'studycafe' || state.visits.length)) return '';
-  const o = openVisit(), left = passLeft(state.profile.passEnd);
+  const o = openVisit(), left = passLeft(state.profile.endDate);
   return `<div class="card"><h2>☕ ${t('cafe_title')}</h2>
     ${o ? `<p><span class="pill ok">${t('cafe_in_now')}</span> ${t('cafe_since', { time: esc(o.in) })}</p><button class="primary" id="vout">${t('cafe_out')}</button>` : `<button class="primary" id="vin">${t('cafe_in')}</button>`}
     ${state.profile.seat ? `<p class="sub">${t('cafe_seat')}: <b>${esc(state.profile.seat)}</b></p>` : ''}
@@ -170,13 +177,13 @@ function renderCafe(app) {
   if (!roster.loaded && !roster.loading) loadRoster();
   const active = roster.learners.filter((l) => l.enroll !== 'left'), q = cafe.q.trim().toLowerCase();
   const list = active.filter((l) => (!q || l.name.toLowerCase().includes(q) || (l.seat || '').toLowerCase().includes(q)) && (!cafe.onlyIn || l.inNow));
-  const inN = active.filter((l) => l.inNow).length, soon = active.filter((l) => l.passEnd && passLeft(l.passEnd) <= 7).length, totalMin = sum(active.map((l) => l.todayMin));
+  const inN = active.filter((l) => l.inNow).length, soon = active.filter((l) => l.endDate && passLeft(l.endDate) <= 7).length, totalMin = sum(active.map((l) => l.todayMin));
   app.innerHTML = `<div class="card"><h2>${t('cafe_console')}</h2><p class="sub">${t('cafe_help')}</p>
       <div class="tiles"><div class="tile"><b>${inN}</b><span class="sub">${t('cafe_in_now')}</span></div><div class="tile"><b>${Math.round(totalMin / 60 * 10) / 10}h</b><span class="sub">${t('cafe_today_total')}</span></div><div class="tile"><b>${soon}</b><span class="sub">${t('cafe_pass_soon')}</span></div></div>
       <div class="row"><input type="text" id="cfq" placeholder="${t('cafe_search')}" value="${esc(cafe.q)}"><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="cfin" ${cafe.onlyIn ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cafe_only_in')}</span></label></div>
       <span class="sub" id="cfmsg">${esc(cafe.msg)}</span></div>
-    ${list.length ? `<div class="card"><div class="tscroll"><table class="wplan"><thead><tr><th>${t('roster_name')}</th><th>${t('cafe_seat')}</th><th>${t('cafe_today')}</th><th>${t('cafe_pass')}</th><th></th></tr></thead><tbody>${list.map((l) => { const left = l.passEnd ? passLeft(l.passEnd) : null; return `<tr><td class="subj">${esc(l.name)}${l.inNow ? ` <span class="pill ok">${t('cafe_in_now')}</span>` : ''}</td><td>${esc(l.seat || '-')}</td><td>${unit('unit_min', l.todayMin)}</td>
-      <td class="detail">${left === null ? '-' : `${esc(l.passType || '')} ${left < 0 ? `<span class="tag weak">${t('cafe_pass_expired')}</span>` : left <= 7 ? `<span class="tag weak">${t('cafe_pass_left', { n: left })}</span>` : esc(l.passEnd)}`}</td>
+    ${list.length ? `<div class="card"><div class="tscroll"><table class="wplan"><thead><tr><th>${t('roster_name')}</th><th>${t('cafe_seat')}</th><th>${t('cafe_today')}</th><th>${t('cafe_pass')}</th><th></th></tr></thead><tbody>${list.map((l) => { const left = l.endDate ? passLeft(l.endDate) : null; return `<tr><td class="subj">${esc(l.name)}${l.inNow ? ` <span class="pill ok">${t('cafe_in_now')}</span>` : ''}</td><td>${esc(l.seat || '-')}</td><td>${unit('unit_min', l.todayMin)}</td>
+      <td class="detail">${left === null ? '-' : `${esc(l.passType || '')} ${left < 0 ? `<span class="tag weak">${t('cafe_pass_expired')}</span>` : left <= 7 ? `<span class="tag weak">${t('cafe_pass_left', { n: left })}</span>` : esc(l.endDate)}`}</td>
       <td><button class="${l.inNow ? '' : 'primary'}" data-cf="${esc(l.id)}:${l.inNow ? 'out' : 'in'}">${l.inNow ? t('cafe_out') : t('cafe_in')}</button></td></tr>`; }).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.loading ? t('loading') : t('cafe_empty')}</p></div>`}`;
   $('#cfq').oninput = (e) => { cafe.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('#cfq'); el.focus(); el.setSelectionRange(pos, pos); };
   $('#cfin').onchange = (e) => { cafe.onlyIn = e.target.checked; render(); };

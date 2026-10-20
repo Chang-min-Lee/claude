@@ -1,9 +1,11 @@
 // 학생 정보·입력 (강사·관리자): 한 화면에서 기본 정보·목표·검사 결과·성적·시간표·주간계획·할 일·진단서를 모두 입력/수정
-const ORG_TYPES = ['language', 'studyroom', 'consultant', 'studycafe'];
+const ORG_TYPES = ['language', 'academy', 'studyroom', 'studycafe', 'consultant', 'self'];
 const inOpen = new Set(['basic']); // 펼쳐 둔 섹션(다시 그려도 유지)
 const IN_SECTIONS = [['basic', 'in_s_basic'], ['intake', 'in_s_intake'], ['attend', 'in_s_attend'], ['career', 'in_s_career'], ['goal', 'in_s_goal'], ['tests', 'in_s_tests'], ['grades', 'in_s_grades'], ['sched', 'in_s_sched'], ['wp', 'in_s_wp'], ['tasks', 'in_s_tasks'], ['diag', 'in_s_diag']];
 let inDel = false, inMsg = '';
 
+// 종료일까지 남은 날 안내 문구
+function periodHint(end) { const n = daysUntil(end); return n < 0 ? t('per_ended', { n: -n }) : n === 0 ? t('per_today') : n <= 7 ? t('per_soon', { n }) : t('per_left', { n }); }
 const lines = (v) => String(v || '').split('\n').map((x) => x.trim()).filter(Boolean);
 const splitPair = (line) => { const m = line.match(/^([^:：]+)[:：]\s*(.*)$/); return m ? [m[1].trim(), m[2].trim()] : [line, '']; };
 
@@ -24,14 +26,17 @@ function renderInput(app) {
 function basicCard(el) {
   const p = state.profile, v = state.viewAs, admin = roleOf() === 'admin';
   if (admin && !roster.loaded && !roster.loading) loadRoster().then(() => { if (state.tab === 'input') render(); });
-  const sv = p.services || { study: true, career: true };
+  const sv = p.services || { study: true, career: true }, ot = p.orgType || '', hasClass = ['language', 'academy', 'studyroom'].includes(ot), isCafe = ot === 'studycafe';
   el.innerHTML = `<div class="card">
     <input type="text" id="bname" maxlength="20" placeholder="${t('reg_name')}" value="${esc(p.name)}">
     <div class="row"><select id="bgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${p.group === k ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select>
       <input type="text" id="bschool" maxlength="40" placeholder="${t('reg_school')}" value="${esc(p.school)}"></div>
     <div class="row"><select id="borg"><option value="">${t('ot_none')}</option>${ORG_TYPES.map((k) => `<option value="${k}" ${p.orgType === k ? 'selected' : ''}>${t('ot_' + k)}</option>`).join('')}</select></div>
-    <div class="row"><input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}"><select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select></div>
-    <div class="row"><input type="text" id="bseat" maxlength="20" placeholder="${t('cafe_seat')}" value="${esc(p.seat || '')}"><input type="text" id="bpass" maxlength="30" placeholder="${t('cafe_pass')}" value="${esc(p.passType || '')}"><input type="date" id="bpend" value="${esc(p.passEnd || '')}" title="${t('cafe_pass_end')}" style="max-width:170px"></div>
+    <div class="row">${hasClass ? `<input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}">` : ''}<select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select></div>
+    <div class="row"><label class="sub">${t('per_start')} <input type="date" id="bstart" value="${esc(p.startDate || '')}"></label><label class="sub">${t('per_end')} <input type="date" id="bend" value="${esc(p.endDate || '')}"></label>
+      <button type="button" data-bext="30">+${t('per_m', { n: 1 })}</button><button type="button" data-bext="90">+${t('per_m', { n: 3 })}</button><button type="button" data-bext="180">+${t('per_m', { n: 6 })}</button></div>
+    ${p.endDate ? `<p class="sub">${periodHint(p.endDate)}</p>` : `<p class="sub">${t('per_help')}</p>`}
+    ${isCafe ? `<div class="row"><input type="text" id="bseat" maxlength="20" placeholder="${t('cafe_seat')}" value="${esc(p.seat || '')}"><input type="text" id="bpass" maxlength="30" placeholder="${t('cafe_pass')}" value="${esc(p.passType || '')}"></div>` : ''}
     <div class="row"><input type="text" id="bpname" maxlength="20" placeholder="${t('par_name')}" value="${esc(p.parentName || '')}"><input type="text" id="bpphone" maxlength="30" placeholder="${t('par_phone')}" value="${esc(p.parentPhone || '')}"></div>
     <div class="row"><span class="sub">${t('ns_label')}</span><input type="date" id="bnext" value="${esc(p.nextSession || '')}" style="max-width:170px"></div>
     <label class="row"><input type="checkbox" id="bs1" ${sv.study !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
@@ -44,11 +49,13 @@ function basicCard(el) {
     <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
   bindParentLinkCard();
   const upd = () => {
-    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value; p.seat = $('#bseat').value.trim(); p.passType = $('#bpass').value.trim(); p.passEnd = $('#bpend').value;
+    p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; if ($('#bclass')) p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.startDate = $('#bstart').value; p.endDate = $('#bend').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value; if ($('#bseat')) { p.seat = $('#bseat').value.trim(); p.passType = $('#bpass').value.trim(); }
     p.services = { study: $('#bs1').checked, career: $('#bs2').checked }; p.note = $('#bnote').value.trim(); p.teacherNote = $('#btnote').value.trim();
     state.viewAs.name = p.name; save('profile'); $('#bmsg').textContent = t('saved');
   };
-  ['#bname', '#bgroup', '#bschool', '#borg', '#bclass', '#bstatus', '#bpname', '#bpphone', '#bnext', '#bseat', '#bpass', '#bpend', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => ($(s).onchange = upd));
+  ['#bname', '#bgroup', '#bschool', '#borg', '#bclass', '#bstatus', '#bpname', '#bpphone', '#bnext', '#bstart', '#bend', '#bseat', '#bpass', '#bs1', '#bs2', '#bnote', '#btnote'].forEach((s) => { if ($(s)) $(s).onchange = upd; });
+  $('#borg').onchange = () => { upd(); render(); }; // 운영 모델에 따라 보이는 항목이 달라지므로 다시 그린다
+  el.querySelectorAll('[data-bext]').forEach((b) => (b.onclick = () => { const cur = $('#bend').value >= today() ? $('#bend').value : today(), d = new Date(cur + 'T00:00:00'); d.setDate(d.getDate() + +b.dataset.bext); $('#bend').value = dk(d); upd(); render(); }));
   if ($('#brs')) $('#brs').onchange = (e) => { state.consent = { ...state.consent, research: e.target.checked }; save('consent'); $('#bmsg').textContent = t('saved'); };
   if ($('#bteacher')) $('#bteacher').onchange = async (e) => {
     try { await api(`/api/students/${v.id}/meta`, { method: 'PUT', body: { teacherId: e.target.value } }); v.teacher = roster.teachers.find((x) => x.id === e.target.value) || null; roster.loaded = false; $('#bmsg').textContent = t('saved'); } catch (er) { $('#bmsg').textContent = er.message; }

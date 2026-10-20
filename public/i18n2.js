@@ -389,3 +389,23 @@ Object.assign(UI.vi, {
 
 Object.assign(UI.ko, { crs_ai_title: 'AI 수강 학습법', crs_ai_help: '이 학생의 학습 유형에 맞춰 인강을 어떻게 들으면 좋은지 AI가 정리해 줘요. (특정 강좌 이름은 말하지 않아요)', crs_ai_btn: 'AI로 만들기', crs_ai_redo: '다시 만들기', crs_ai_how: '이렇게 들어 보세요', crs_ai_week: '주간 학습 제안', crs_ai_pit: '이건 피하세요', crs_ai_copy: '복사', crs_ai_save: '상담일지에 저장', crs_ai_saved: '상담일지에 저장했어요.' });
 Object.assign(UI.vi, { crs_ai_title: 'Cách học khóa trực tuyến bằng AI', crs_ai_help: 'AI sẽ tổng hợp cách nên học bài giảng trực tuyến phù hợp với kiểu học của học viên này. (Không nêu tên khóa học cụ thể)', crs_ai_btn: 'Tạo bằng AI', crs_ai_redo: 'Tạo lại', crs_ai_how: 'Hãy học như sau', crs_ai_week: 'Gợi ý lịch học trong tuần', crs_ai_pit: 'Nên tránh', crs_ai_copy: 'Sao chép', crs_ai_save: 'Lưu vào nhật ký tư vấn', crs_ai_saved: 'Đã lưu vào nhật ký tư vấn.' });
+
+// 운영 모델(학원·혼자 공부) + 등록 기간(종료일 알림)
+Object.assign(UI.ko, {
+  ot_academy: '학원', ot_self: '혼자 공부(자기주도)',
+  per_start: '등록일', per_end: '종료일', per_m: '{n}개월', per_help: '종료일을 넣으면 7일 전부터 안내해요. (비워 두면 기간 없이 계속 이용)', per_ended: '종료일이 {n}일 지났어요', per_today: '오늘이 종료일이에요', per_soon: '종료 {n}일 전이에요', per_left: '종료까지 {n}일 남았어요',
+  tile_end: '종료 임박·지남', per_tag_ended: '종료됨', per_tag_soon: '종료 D-{n}',
+  iv_end: '종료 임박', iv_ended: '종료일 지남', iv_extend: '연장', iv_extended: '종료일을 {d}로 연장했어요.', iv_leave: '퇴원 처리', iv_left_done: '퇴원으로 처리했어요.',
+  iv_end_why: '종료일({d})까지 {n}일 남았어요.', iv_end_todo: '연장·재등록 의사를 미리 물어보세요. 연장하면 아래 버튼으로 종료일을 늘리고, 안 하면 마무리 상담과 리포트를 준비하세요.', iv_end_tpl: '{name}님, 이용 기간이 {n}일 뒤에 끝나요. 계속 이어가실지 편하게 말씀해 주세요.',
+  iv_ended_why: '종료일({d})이 지났어요. 아직 재원 상태로 남아 있어요.', iv_ended_todo: '연장했으면 종료일을 늘리고, 종료됐으면 "퇴원 처리"로 정리하세요.', iv_ended_tpl: '{name}님, 이용 기간이 끝났어요. 계속하시려면 연장 안내를 드릴게요.',
+  end_notice_t: '종료일 안내', end_notice: '이용 종료일이 {n}일 남았어요 ({d}). 계속하려면 선생님께 말씀해 주세요.', end_notice_today: '오늘이 종료일이에요. 계속하려면 선생님께 말씀해 주세요.', end_notice_over: '종료일({d})이 지났어요. 계속하려면 선생님께 말씀해 주세요.',
+});
+Object.assign(UI.vi, {
+  ot_academy: 'Trung tâm dạy thêm', ot_self: 'Tự học (ở nhà)',
+  per_start: 'Ngày đăng ký', per_end: 'Ngày kết thúc', per_m: '{n} tháng', per_help: 'Nhập ngày kết thúc thì hệ thống nhắc từ 7 ngày trước. (Để trống nếu không giới hạn thời gian)', per_ended: 'Đã quá ngày kết thúc {n} ngày', per_today: 'Hôm nay là ngày kết thúc', per_soon: 'Còn {n} ngày là kết thúc', per_left: 'Còn {n} ngày đến ngày kết thúc',
+  tile_end: 'Sắp/đã hết hạn', per_tag_ended: 'Đã hết hạn', per_tag_soon: 'Hết hạn D-{n}',
+  iv_end: 'Sắp hết hạn', iv_ended: 'Quá hạn', iv_extend: 'gia hạn', iv_extended: 'Đã gia hạn đến {d}.', iv_leave: 'Xử lý nghỉ học', iv_left_done: 'Đã chuyển sang trạng thái nghỉ.',
+  iv_end_why: 'Còn {n} ngày đến ngày kết thúc ({d}).', iv_end_todo: 'Hỏi trước ý định gia hạn/đăng ký lại. Nếu gia hạn, dùng nút bên dưới; nếu không, hãy chuẩn bị buổi tổng kết và báo cáo.', iv_end_tpl: '{name} à, thời hạn sử dụng sẽ kết thúc sau {n} ngày. Em cho cô/thầy biết có muốn tiếp tục không nhé.',
+  iv_ended_why: 'Đã quá ngày kết thúc ({d}) nhưng vẫn đang ở trạng thái đang học.', iv_ended_todo: 'Nếu đã gia hạn thì kéo dài ngày kết thúc; nếu đã kết thúc thì chọn "Xử lý nghỉ học".', iv_ended_tpl: '{name} à, thời hạn đã kết thúc. Nếu muốn tiếp tục, cô/thầy sẽ hướng dẫn gia hạn.',
+  end_notice_t: 'Thông báo ngày kết thúc', end_notice: 'Còn {n} ngày là hết thời hạn sử dụng ({d}). Muốn tiếp tục hãy báo giáo viên.', end_notice_today: 'Hôm nay là ngày kết thúc. Muốn tiếp tục hãy báo giáo viên.', end_notice_over: 'Đã quá ngày kết thúc ({d}). Muốn tiếp tục hãy báo giáo viên.',
+});

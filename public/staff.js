@@ -44,6 +44,8 @@ function interventions(l) {
   const out = [], nm = l.name;
   if (l.flags.wellbeing) out.push({ k: 'wb', sev: 4, tab: 'counsel', why: t('iv_wb_why'), todo: t('iv_wb_todo'), tpl: t('iv_wb_tpl', { name: nm }) });
   if (l.awaiting) out.push({ k: 'msg', sev: 3, tab: 'messages', why: t('iv_msg_why'), todo: t('iv_msg_todo'), tpl: '' });
+  if (l.flags.ended && !l.snoozed) out.push({ k: 'ended', sev: 3, tab: 'input', ext: true, why: t('iv_ended_why', { d: l.endDate }), todo: t('iv_ended_todo'), tpl: t('iv_ended_tpl', { name: nm }) });
+  if (l.flags.endSoon && !l.snoozed) out.push({ k: 'end', sev: 2, tab: 'input', ext: true, why: t('iv_end_why', { n: l.endDays, d: l.endDate }), todo: t('iv_end_todo'), tpl: t('iv_end_tpl', { name: nm, n: l.endDays }) });
   if (l.flags.idle && !l.snoozed) out.push({ k: 'idle', sev: 3, tab: 'sdash', why: t('iv_idle_why', { n: l.idleDays ?? '?' }), todo: t('iv_idle_todo'), tpl: t('iv_idle_tpl', { name: nm }) });
   if (l.flags.lowAtt && !l.snoozed) out.push({ k: 'att', sev: 2, tab: 'input', why: t('iv_att_why', { rate: l.attRate ?? '?' }), todo: t('iv_att_todo'), tpl: t('iv_att_tpl', { name: nm }) });
   if (l.flags.validity && !l.snoozed) out.push({ k: 'val', sev: 2, tab: 'tests', why: t('iv_val_why', { tests: (l.validityTests || []).map((id) => tx(id).name).join(', ') }), todo: t('iv_val_todo'), tpl: t('iv_val_tpl', { name: nm }) });
@@ -52,17 +54,19 @@ function interventions(l) {
 }
 function ivCard() {
   const rows = roster.learners.filter((l) => l.enroll !== 'left').map((l) => [l, interventions(l)]).filter(([, a]) => a.length).sort((x, y) => y[1][0].sev - x[1][0].sev);
-  if (!rows.length) return `<div class="card callout"><h2>✅ ${t('iv_title')}</h2><p>${t('iv_none')}</p></div>`;
+  if (!rows.length) return `<div class="card callout"><h2>✅ ${t('iv_title')}</h2><p>${t('iv_none')}</p>${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</div>`;
   return `<div class="card"><h2>${t('iv_title')} <span class="sub">${rows.length}</span></h2><p class="sub">${t('iv_help')}</p>
     ${rows.map(([l, arr]) => `<div class="iv"><div><b>${esc(l.name)}</b> ${l.className ? `<span class="sub">${esc(l.className)}</span>` : ''}</div>
       <ul class="ivlist">${arr.map((a) => `<li><span class="tag ${a.sev >= 3 ? 'weak' : ''}">${t('iv_' + a.k)}</span> ${esc(a.why)}<br><span class="sub"><b>${t('iv_todo')}</b> ${esc(a.todo)}</span></li>`).join('')}</ul>
-      <div class="row"><button class="primary" data-ivopen="${esc(l.id)}:${arr[0].tab}">${t('iv_open')}</button><button data-ivmsg="${esc(l.id)}">${t('iv_msg_btn')}</button>${l.flags.idle || l.flags.validity || l.flags.lowAtt ? `<button data-ivsnooze="${esc(l.id)}">${t('iv_snooze')}</button>` : ''}</div>
+      <div class="row"><button class="primary" data-ivopen="${esc(l.id)}:${arr[0].tab}">${t('iv_open')}</button><button data-ivmsg="${esc(l.id)}">${t('iv_msg_btn')}</button>${arr.some((a) => a.ext) ? `<button data-ivext="${esc(l.id)}:30">+${t('per_m', { n: 1 })} ${t('iv_extend')}</button><button data-ivext="${esc(l.id)}:90">+${t('per_m', { n: 3 })} ${t('iv_extend')}</button>` : ''}${l.flags.ended ? `<button data-ivleave="${esc(l.id)}" style="color:var(--crit)">${t('iv_leave')}</button>` : ''}${l.flags.idle || l.flags.validity || l.flags.lowAtt || l.flags.endSoon || l.flags.ended ? `<button data-ivsnooze="${esc(l.id)}">${t('iv_snooze')}</button>` : ''}</div>
       ${iv.open === l.id ? `<div class="row"><textarea id="ivtext" rows="2" maxlength="500">${esc(iv.text)}</textarea></div><div class="row"><button class="primary" id="ivsend">${t('iv_send')}</button><button id="ivcancel">${t('btn_cancel')}</button></div>` : ''}</div>`).join('')}
     ${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</div>`;
 }
 function bindIv(app) {
   app.querySelectorAll('[data-ivopen]').forEach((b) => (b.onclick = () => { const [id, tab] = b.dataset.ivopen.split(':'); openStudent(id, tab); }));
   app.querySelectorAll('[data-ivmsg]').forEach((b) => (b.onclick = () => { const l = roster.learners.find((x) => x.id === b.dataset.ivmsg); iv.open = l.id; iv.text = (interventions(l).find((a) => a.tpl) || {}).tpl || ''; iv.msg = ''; render(); }));
+  app.querySelectorAll('[data-ivext]').forEach((b) => (b.onclick = async () => { const [id, d] = b.dataset.ivext.split(':'); try { const r = await api(`/api/students/${id}/period`, { method: 'POST', body: { extendDays: +d, today: today() } }); iv.msg = t('iv_extended', { d: r.endDate }); } catch (e) { iv.msg = e.message; } roster.loaded = false; render(); }));
+  app.querySelectorAll('[data-ivleave]').forEach((b) => (b.onclick = async () => { try { await api(`/api/students/${b.dataset.ivleave}/period`, { method: 'POST', body: { status: 'left', today: today() } }); iv.msg = t('iv_left_done'); } catch (e) { iv.msg = e.message; } roster.loaded = false; render(); }));
   app.querySelectorAll('[data-ivsnooze]').forEach((b) => (b.onclick = async () => { try { await api(`/api/students/${b.dataset.ivsnooze}/snooze`, { method: 'POST', body: { days: 3 } }); iv.msg = t('iv_snoozed'); } catch (e) { iv.msg = e.message; } roster.loaded = false; render(); }));
   if ($('#ivcancel')) $('#ivcancel').onclick = () => { iv.open = null; render(); };
   if ($('#ivsend')) $('#ivsend').onclick = async () => {
@@ -76,11 +80,11 @@ function quickStart() {
   const steps = [['qs1', 'account', !!state.org?.orgName], ['qs2', 'staff', false], ['qs3', 'register', false], ['qs4', 'register', false]];
   return `<div class="card callout"><h2>🚀 ${t('qs_title')}</h2><p class="sub">${t('qs_help')}</p>${steps.map(([k, tab, done], i) => `<div class="task ${done ? 'done' : ''}"><span><b>${i + 1}.</b> ${t(k)}</span><button data-qs="${tab}">${t('qs_go')}</button></div>`).join('')}</div>`;
 }
-const flagPass = (l) => !roster.flag || (roster.flag === 'msg' ? !!l.awaiting : roster.flag === 'dday' ? l.flags.ddaySoon : roster.flag === 'idle' ? l.flags.idle : true);
+const flagPass = (l) => !roster.flag || (roster.flag === 'msg' ? !!l.awaiting : roster.flag === 'dday' ? l.flags.ddaySoon : roster.flag === 'idle' ? l.flags.idle : roster.flag === 'end' ? l.flags.endSoon || l.flags.ended : true);
 // 오늘 살펴볼 것: 클릭하면 해당 학생만 걸러서 본다
 function todayTiles() {
-  const L = roster.learners, n = { watch: L.filter((l) => l.status === 'watch').length, msg: L.filter((l) => l.awaiting).length, dday: L.filter((l) => l.flags.ddaySoon).length, idle: L.filter((l) => l.flags.idle).length };
-  return `<div class="tiles" style="grid-template-columns:repeat(4,1fr)">${[['watch', 'st_watch'], ['msg', 'flag_msg'], ['dday', 'tile_dday'], ['idle', 'flag_idle']].map(([k, lb]) => `<button class="tile ${roster.flag === k || (k === 'watch' && roster.watch) ? 'on' : ''}" data-flag="${k}"><b>${n[k]}</b>${t(lb)}</button>`).join('')}</div>`;
+  const L = roster.learners, n = { watch: L.filter((l) => l.status === 'watch').length, msg: L.filter((l) => l.awaiting).length, dday: L.filter((l) => l.flags.ddaySoon).length, idle: L.filter((l) => l.flags.idle).length, end: L.filter((l) => l.flags.endSoon || l.flags.ended).length };
+  return `<div class="tiles" style="grid-template-columns:repeat(auto-fit,minmax(120px,1fr))">${[['watch', 'st_watch'], ['msg', 'flag_msg'], ['end', 'tile_end'], ['dday', 'tile_dday'], ['idle', 'flag_idle']].map(([k, lb]) => `<button class="tile ${roster.flag === k || (k === 'watch' && roster.watch) ? 'on' : ''}" data-flag="${k}"><b>${n[k]}</b>${t(lb)}</button>`).join('')}</div>`;
 }
 function renderRoster(app) {
   if (!roster.loaded && !roster.loading) loadRoster();
@@ -98,7 +102,7 @@ function renderRoster(app) {
       ${roster.err ? `<p class="sub">${esc(roster.err)}</p>` : ''}</div>
     ${roster.loading && !roster.learners.length ? `<p class="sub">${t('loading')}</p>` : list.length ? `<div class="card"><div class="tscroll"><table class="wplan roster"><thead><tr><th></th><th>${t('roster_name')}</th><th>${t('roster_goal')}</th><th>${t('stat_streak')}</th><th>${t('last7')}</th><th>${t('roster_tasks')}</th><th>${t('rep_checkin_lbl')}</th><th>${t('roster_status')}</th>${admin ? `<th>${t('teacher_lbl')}</th>` : ''}<th></th></tr></thead><tbody>
       ${list.map((l) => `<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${roster.sel.has(l.id) ? 'checked' : ''}></td>
-        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}${l.className ? ' · ' + esc(l.className) : ''}</span>${l.enroll === 'paused' ? ` <span class="tag">${t('en_paused')}</span>` : l.enroll === 'left' ? ` <span class="tag">${t('en_left')}</span>` : ''}${l.nextSession && l.nextSession >= today() ? ` <span class="tag">📅 ${esc(l.nextSession.slice(5))}</span>` : ''}${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
+        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}${l.className ? ' · ' + esc(l.className) : ''}</span>${l.enroll === 'paused' ? ` <span class="tag">${t('en_paused')}</span>` : l.enroll === 'left' ? ` <span class="tag">${t('en_left')}</span>` : ''}${l.flags.ended ? ` <span class="tag weak">${t('per_tag_ended')}</span>` : l.flags.endSoon ? ` <span class="tag weak">${t('per_tag_soon', { n: l.endDays })}</span>` : ''}${l.nextSession && l.nextSession >= today() ? ` <span class="tag">📅 ${esc(l.nextSession.slice(5))}</span>` : ''}${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
         <td class="detail">${esc(l.goal.label)}${ddayCell(l)}</td><td>${unit('unit_day', l.streak)}</td><td>${unit('unit_min', sum(l.week))}</td><td>${l.doneCount}/${l.doneCount + l.openCount}</td><td>${l.checkinsWeek}</td>
         <td><span class="pill ${l.status}">${t('st_' + l.status)}</span></td>${admin ? `<td>${l.teacher ? esc(l.teacher.name) : `<span class="sub">${t('unassigned')}</span>`}</td>` : ''}
         <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}
@@ -145,7 +149,8 @@ function renderRegister(app) {
       <div class="row"><span class="sub">${t('goal_date')}</span><input type="date" id="rgdate" style="max-width:170px"></div>
       <label class="row"><input type="checkbox" id="rs1" checked style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
       <label class="row"><input type="checkbox" id="rs2" checked style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
-      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'studyroom', 'consultant', 'studycafe'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
+      <div class="row"><label class="sub">${t('per_start')} <input type="date" id="rstart" value="${today()}"></label><label class="sub">${t('per_end')} <input type="date" id="rend"></label></div>
+      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'academy', 'studyroom', 'studycafe', 'consultant', 'self'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
       ${admin ? `<div class="row"><select id="rteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></div>` : ''}
       <textarea id="rnote" rows="2" maxlength="200" placeholder="${t('reg_note')}"></textarea>
       <p class="sub">${t('reg_consent_note')}</p>
@@ -159,7 +164,7 @@ function renderRegister(app) {
     const name = $('#rname').value.trim(); if (!name) { $('#rmsg').textContent = t('reg_need_name'); return; }
     $('#rsubmit').disabled = true;
     try {
-      const r = await api('/api/students', { method: 'POST', body: { name, group: $('#rgroup').value, school: $('#rschool').value, note: $('#rnote').value, goalType: $('#rgtype').value, goalLabel: $('#rglabel').value, goalDate: $('#rgdate').value, orgType: $('#rorg').value, services: { study: $('#rs1').checked, career: $('#rs2').checked }, teacherId: $('#rteacher')?.value || '' } });
+      const r = await api('/api/students', { method: 'POST', body: { name, group: $('#rgroup').value, school: $('#rschool').value, note: $('#rnote').value, goalType: $('#rgtype').value, goalLabel: $('#rglabel').value, goalDate: $('#rgdate').value, orgType: $('#rorg').value, startDate: $('#rstart').value, endDate: $('#rend').value, services: { study: $('#rs1').checked, career: $('#rs2').checked }, teacherId: $('#rteacher')?.value || '' } });
       reg = { result: { id: r.id, name, shareCode: r.shareCode }, msg: '' }; roster.loaded = false; render();
     } catch (e) { $('#rmsg').textContent = e.message; $('#rsubmit').disabled = false; }
   };

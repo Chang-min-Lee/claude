@@ -264,6 +264,7 @@ function renderHome(app) {
       ${career}
       <div class="card"><h2>${t('today_step')}</h2><ul>${C().next[g].map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>
     </div><div>
+      ${endNoticeCard()}
       ${nextSessionCard()}
       ${visitCard()}
       ${n !== null ? `<div class="card"><div class="dday"><b>${ddayText(n)}</b><span>${esc(state.goal.label || t('goal_title'))} · ${esc(state.goal.date)}</span></div></div>` : ''}

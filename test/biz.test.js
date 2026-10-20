@@ -119,12 +119,12 @@ test('데이터 현황(analytics)과 연구 동의 내보내기', async () => {
 
 test('스터디카페 입·퇴실: 강사 기록, 이용 시간이 학습 기록에 반영, 중복·권한 방어', async () => {
   const day = new Date().toISOString().slice(0, 10);
-  await put(`/api/students/${S.kid}/data`, { data: { profile: { name: '응웬 마이', group: 'high', orgType: 'studycafe', seat: 'A-12', passType: '월 정기권', passEnd: '2099-12-31' } } }, S.t1);
+  await put(`/api/students/${S.kid}/data`, { data: { profile: { name: '응웬 마이', group: 'high', orgType: 'studycafe', seat: 'A-12', passType: '월 정기권', endDate: '2099-12-31' } } }, S.t1);
   assert.equal((await post('/api/visits', { date: day, time: '09:00', marks: { [S.kid]: 'in' } })).status, 401);
   assert.equal((await post('/api/visits', { date: day, time: '9:00', marks: {} }, S.t1)).status, 400);
   let r = await post('/api/visits', { date: day, time: '09:00', marks: { [S.kid]: 'in', [S.kid2]: 'in' } }, S.t1); assert.equal(r.saved, 1); assert.equal(r.skipped, 1); // 남의 학생은 건너뜀
   r = await post('/api/visits', { date: day, time: '09:30', marks: { [S.kid]: 'in' } }, S.t1); assert.equal(r.saved, 0); // 이미 입실 중
-  let l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, true); assert.equal(l.seat, 'A-12'); assert.equal(l.passEnd, '2099-12-31');
+  let l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, true); assert.equal(l.seat, 'A-12'); assert.equal(l.endDate, '2099-12-31');
   r = await post('/api/visits', { date: day, time: '11:30', marks: { [S.kid]: 'out' } }, S.t1); assert.equal(r.saved, 1);
   r = await post('/api/visits', { date: day, time: '12:00', marks: { [S.kid]: 'out' } }, S.t1); assert.equal(r.saved, 0); // 입실 중이 아님
   l = (await get(`/api/dashboard?today=${day}`, S.t1)).learners.find((x) => x.id === S.kid); assert.equal(l.inNow, false); assert.equal(l.todayMin, 150);
@@ -189,4 +189,25 @@ test('AI 수강 학습법: 정상 응답 정리, 키 없음/파싱 실패/잘못
   mockReply = '{"summary":"","how":[]}'; assert.equal((await post('/api/courseguide', body)).status, 502);
   mockReply = 'not json'; assert.equal((await post('/api/courseguide', body)).status, 502);
   assert.equal((await post('/api/courseguide', { group: 'high', tags: [] })).status, 400);
+});
+
+test('등록 기간: 종료 7일 전·종료 후 알림, 연장/퇴원 처리, 예전 passEnd 이전', async () => {
+  const c = await post('/api/students', { name: '기간 학생', group: 'middle', orgType: 'self', startDate: '2026-01-01', endDate: '2026-02-10' }, S.t1); const id = c.id;
+  const look = async (today) => (await get(`/api/dashboard?today=${today}`, S.t1)).learners.find((x) => x.id === id);
+  let l = await look('2026-02-01'); assert.equal(l.flags.endSoon, false); assert.equal(l.endDays, 9); assert.equal(l.startDate, '2026-01-01');
+  l = await look('2026-02-03'); assert.equal(l.flags.endSoon, true); assert.equal(l.flags.ended, false); assert.equal(l.endDays, 7);
+  l = await look('2026-02-10'); assert.equal(l.flags.endSoon, true); assert.equal(l.endDays, 0);
+  l = await look('2026-02-11'); assert.equal(l.flags.ended, true); assert.equal(l.flags.endSoon, false);
+  assert.equal((await post(`/api/students/${id}/period`, { extendDays: 30 })).status, 401);
+  assert.equal((await post(`/api/students/${id}/period`, { extendDays: 30 }, S.t2)).status, 403);
+  const ex = await post(`/api/students/${id}/period`, { extendDays: 30, today: '2026-02-11' }, S.t1); assert.equal(ex.endDate, '2026-03-13'); // 이미 지났으면 오늘부터 30일
+  const ex2 = await post(`/api/students/${id}/period`, { extendDays: 7, today: '2026-02-11' }, S.t1); assert.equal(ex2.endDate, '2026-03-20'); // 남아 있으면 종료일부터
+  l = await look('2026-02-11'); assert.equal(l.flags.ended, false);
+  assert.equal((await post(`/api/students/${id}/period`, { endDate: '2026-02-01', status: 'left' }, S.t1)).status, 'left');
+  l = await look('2026-02-11'); assert.equal(l.enroll, 'left'); assert.equal(l.flags.ended, false); // 퇴원이면 알림 없음
+  assert.equal((await post(`/api/students/${id}/period`, { endDate: 'bad' }, S.t1)).endDate, '');
+  // 예전 passEnd 는 종료일로 옮겨 담긴다
+  await put(`/api/students/${id}/data`, { data: { profile: { name: '기간 학생', group: 'middle', passEnd: '2027-05-05' } } }, S.t1);
+  assert.equal((await get(`/api/students/${id}`, S.t1)).data.profile.endDate, '2027-05-05');
+  assert.equal((await get(`/api/students/${id}`, S.t1)).data.profile.orgType, '');
 });

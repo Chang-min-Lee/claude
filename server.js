@@ -12,7 +12,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PUBLIC = path.join(__dirname, 'public');
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
 const SESSION_MS = 30 * 24 * 3600 * 1000;
-const { sanitizeCourse, sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, STAFF_KEYS, ATT, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
+const { sanitizeCourse, sanitizers, sanitizeData, DATA_KEYS, CLIENT_KEYS, STAFF_KEYS, ATT, ENROLL, MAX_DATA_BYTES, SHARED_DEEP, clip: clipStr, int: intIn, isDate } = require('./lib/sanitize');
 const SEC_HEADERS = {
   'Content-Security-Policy': "default-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
   'X-Content-Type-Options': 'nosniff', 'Referrer-Policy': 'no-referrer', 'Cache-Control': 'no-store',
@@ -312,7 +312,8 @@ function summarize(u, todayStr, viewer) {
   const ddaySoon = dday !== null && dday >= 0 && dday <= 14;
   const attKeys30 = Object.entries(d.attendance || {}).filter(([k]) => k >= dayKey((() => { const f = new Date(base); f.setDate(f.getDate() - 29); return f; })()) && k <= todayStr).map(([, v]) => v);
   const lowAtt = attKeys30.length >= 4 && attKeys30.filter((v) => v === 'p' || v === 'l').length / attKeys30.length < 0.7; // 최근 30일 출석률 70% 미만(기록 4건 이상)
-  const flags = { idle, validity, wellbeing, ddaySoon, lowAtt };
+  const endD = d.profile?.endDate || d.profile?.passEnd || '', endDays = endD ? daysBetween(todayStr, endD) : null, activeEnroll = (d.profile?.status || 'active') === 'active';
+  const flags = { idle, validity, wellbeing, ddaySoon, lowAtt, endSoon: activeEnroll && endDays !== null && endDays >= 0 && endDays <= 7, ended: activeEnroll && endDays !== null && endDays < 0 }; // 종료 7일 전 / 종료일 지남
   const snoozed = !!(d.profile?.snoozeUntil && d.profile.snoozeUntil >= todayStr); // 강사가 "확인했어요"로 잠시 보류한 상태
   const t = teacherOf(u.id);
   const att = d.attendance || {}, from45 = new Date(base); from45.setDate(from45.getDate() - 44), from30 = new Date(base); from30.setDate(from30.getDate() - 29);
@@ -329,7 +330,7 @@ function summarize(u, todayStr, viewer) {
     flags, snoozed, snoozeUntil: d.profile?.snoozeUntil || '', idleDays: lastActive ? daysBetween(lastActive, todayStr) : (u.createdAt ? Math.floor((Date.now() - u.createdAt) / 86400000) : null),
     validityTests: Object.entries(deep).filter(([, r]) => r.v?.length).map(([id]) => id),
     status: !snoozed && (idle || validity || wellbeing || lowAtt) ? 'watch' : 'ok',
-    inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', passEnd: d.profile?.passEnd || '', todayMin: (d.log || {})[todayStr] || 0,
+    inNow: (d.visits || []).some((v) => !v.out), seat: d.profile?.seat || '', passType: d.profile?.passType || '', startDate: d.profile?.startDate || '', endDate: d.profile?.endDate || d.profile?.passEnd || '', endDays: (d.profile?.endDate || d.profile?.passEnd) ? daysBetween(todayStr, d.profile?.endDate || d.profile?.passEnd) : null, todayMin: (d.log || {})[todayStr] || 0,
     orgType: d.profile?.orgType || '', className: d.profile?.className || '', enroll: d.profile?.status || 'active', nextSession: d.profile?.nextSession || '', att: attRecent, attRate,
   };
 }
@@ -584,7 +585,7 @@ const routes = {
     const b = await readBody(req);
     const name = clipStr(b.name, 20);
     if (!name) throw new HttpError(400, 'nameReq');
-    const profile = sanitizers.profile({ name, group: b.group, services: b.services, school: b.school, note: b.note, orgType: b.orgType });
+    const profile = sanitizers.profile({ name, group: b.group, services: b.services, school: b.school, note: b.note, orgType: b.orgType, className: b.className, startDate: b.startDate, endDate: b.endDate });
     const goal = sanitizers.goal({ type: b.goalType, label: b.goalLabel, date: b.goalDate });
     const l = newUser({ email: null, name, role: 'learner', managedBy: u.id, data: { profile, goal, consent: { wellbeing: true } } });
     db.users[l.id] = l;
@@ -659,6 +660,20 @@ const routes = {
 
 // ---------- 경로 매개변수 라우트 (/api/students/:id ...) ----------
 const paramRoutes = [
+  // 등록 기간: 종료일 연장(extendDays) / 직접 지정(endDate) / 상태(재원·휴원·퇴원) 변경
+  ['POST', /^\/api\/students\/([\w-]+)\/period$/, async (req, url, [id]) => {
+    const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
+    const l = learnerOr404(u, id, true), b = await readBody(req), today = isDate(b.today) ? b.today : dayKey(new Date());
+    const prof = { ...(l.data?.profile || { name: l.name }) };
+    if (b.extendDays) {
+      const base = (prof.endDate || prof.passEnd) && (prof.endDate || prof.passEnd) >= today ? (prof.endDate || prof.passEnd) : today, d = new Date(base + 'T00:00:00');
+      d.setDate(d.getDate() + intIn(b.extendDays, 1, 730, 30)); prof.endDate = dayKey(d); prof.status = 'active';
+    } else if ('endDate' in b) prof.endDate = isDate(b.endDate) ? b.endDate : '';
+    if (ENROLL.includes(b.status)) prof.status = b.status;
+    delete prof.passEnd;
+    const clean = sanitizers.profile(prof); storeData(l, { profile: clean });
+    return { endDate: clean.endDate, status: clean.status };
+  }],
   // 개입 안내 보류: 강사가 "확인했어요"를 누르면 며칠간 '확인 필요'에서 뺀다 (days 0 이면 해제)
   ['DELETE', /^\/api\/courses\/([\w-]+)$/, async (req, url, [id]) => {
     const u = needUser(req); if (!isStaff(u)) throw new HttpError(403, 'staffOnly');
