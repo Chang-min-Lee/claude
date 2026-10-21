@@ -188,9 +188,13 @@ function render() {
   const onboarding = !state.user && !state.profile;
   const tabs = onboarding ? [] : tabsNow();
   if (!onboarding && !tabs.includes(state.tab) && !(STAFF_HIDDEN.includes(state.tab) && ['teacher', 'admin'].includes(role) && !state.viewAs)) state.tab = tabs[0]; // 온보딩 중에는 'account'(로그인 화면)만 허용
-  $('#nav').hidden = onboarding;
-  $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab || (state.tab === 'register' && k === 'roster') ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
-  $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
+  $('#nav').hidden = false;
+  if (onboarding) guestNav();
+  else {
+    $('#nav').innerHTML = tabs.map((k) => { const n = tabBadge(k); return `<button data-tab="${k}" class="${k === state.tab || (state.tab === 'register' && k === 'roster') ? 'on' : ''}">${icon(k)}<span>${t('tab_' + k)}</span>${n ? `<b class="dot">${n}</b>` : ''}</button>`; }).join('');
+    $('#nav').querySelectorAll('button').forEach((b) => (b.onclick = () => { state.tab = b.dataset.tab; if (typeof roster !== 'undefined' && ['roster', 'classes', 'cafe'].includes(state.tab)) roster.loaded = false; if (typeof an !== 'undefined' && state.tab === 'data') an.data = null; render(); scrollTo(0, 0); }));
+  }
+  sideUser();
   if (onboarding) { state.tab === 'account' ? renderAccount(app) : state.trial ? renderOnboarding(app) : renderLanding(app); app.insertAdjacentHTML('beforeend', legalFooter()); app.insertAdjacentHTML('afterbegin', betaBanner()); if ($('#betaclose')) $('#betaclose').onclick = () => { betaHidden = true; render(); }; return; }
   (RENDERERS()[state.tab] || renderHome)(app);
   app.insertAdjacentHTML('beforeend', legalFooter());
@@ -205,19 +209,44 @@ function render() {
   }
 }
 
-// 처음 화면: 무엇을 하는 곳인지 + 로그인/회원가입/활성화 코드/체험 진입
+// 로그인·가입 입구: 왼쪽 사이드바(모바일은 아래 막대)에 둔다
+const ENTRY_IC = { learner: 'study', guardian: 'dash', teacher: 'roster', admin: 'staff' };
+function enterAs(entry, mode) {
+  state.entry = entry;
+  if (PREVIEW && mode === 'login') { state.trial = entry === 'learner'; return demoSwitch(entry); } // 미리보기: 로그인 버튼이 곧바로 샘플 화면으로 들어간다
+  state.trial = false; state.authMode = mode; state.tab = 'account'; render(); scrollTo(0, 0);
+}
+function guestNav() {
+  const on = (k, m) => state.tab === 'account' && !state.trial && (state.entry || 'learner') === k && (state.authMode || 'login') === m ? 'on' : '';
+  const nav = $('#nav');
+  nav.innerHTML = `<div class="navlabel">${t('side_login')}</div>
+    ${['learner', 'guardian', 'teacher', 'admin'].map((k) => `<button data-en="${k}:login" class="${on(k, 'login')}">${icon(ENTRY_IC[k])}<span>${t('ent_' + k)}</span></button>`).join('')}
+    <div class="navlabel">${t('side_new')}</div>
+    <button data-en="learner:signup" class="${on('learner', 'signup')}">${icon('register')}<span>${t('auth_tab_signup')}</span></button>
+    <button data-en="learner:claim" class="${on('learner', 'claim')}">${icon('input')}<span>${t('auth_tab_claim')}</span></button>
+    <button data-trial="1" class="${state.trial ? 'on' : ''}">${icon('home')}<span>${t('side_trial')}</span></button>`;
+  nav.querySelectorAll('[data-en]').forEach((b) => { const [e, m] = b.dataset.en.split(':'); b.onclick = () => enterAs(e, m); });
+  nav.querySelector('[data-trial]').onclick = () => { state.trial = true; state.tab = 'home'; render(); scrollTo(0, 0); };
+}
+// 로그인한 사람: 사이드바 아래에 이름·역할·로그아웃
+async function doLogout() {
+  await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
+  state.token = null; state.user = null; state.viewAs = null; state.ro = false; store.set('token', null); dirty.clear(); clearLocal(); state.tab = 'home'; state.entry = null; render(); // 공용 기기에 학습 데이터가 남지 않도록 로컬 사본을 지운다
+}
+function sideUser() {
+  const el = $('#sideuser'); if (!el) return;
+  if (!state.user) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML = `<span class="av">${esc((state.user.name || '?').slice(0, 1))}</span><span class="who"><b>${esc(state.user.name)}</b><small>${t('role_' + state.user.role)}</small></span><button id="sidelogout" type="button" title="${t('btn_logout')}" aria-label="${t('btn_logout')}">${t('btn_logout')}</button>`;
+  $('#sidelogout').onclick = doLogout;
+}
+// 처음 화면: 한눈에 보이는 소개
 function renderLanding(app) {
-  const enter = (entry, mode) => () => {
-    state.entry = entry;
-    if (PREVIEW && mode === 'login') { state.trial = entry === 'learner'; return demoSwitch(entry); } // 미리보기: 로그인 버튼이 곧바로 샘플 화면으로 들어간다
-    state.authMode = mode; state.tab = 'account'; render();
-  };
-  const IC = { learner: 'study', guardian: 'dash', teacher: 'roster', admin: 'staff' };
+  const who = [['learner', 'land_l_t', 'land_l_d'], ['teacher', 'land_s_t', 'land_s_d'], ['guardian', 'land_p_t', 'land_p_d']];
   app.innerHTML = `<div class="landing"><h1>${esc(orgName())}</h1><p class="lead">${t('land_tagline')}</p>
-      <div class="entrygrid">${['learner', 'guardian', 'teacher', 'admin'].map((k) => `<button class="entrytile" data-en="${k}:login"><span class="ei">${icon(IC[k])}</span><span><b>${t('login_as_' + k)}</b><small>${t('ent_' + k + '_d')}</small></span></button>`).join('')}</div>
-      <p class="sub landlinks"><button class="linkbtn" data-en="learner:signup">${t('auth_tab_signup')}</button> · <button class="linkbtn" data-en="learner:claim">${t('land_claim_q')} ${t('auth_tab_claim')}</button> · <button class="linkbtn" id="ltrial">${t('land_trial')}</button></p></div>`;
-  app.querySelectorAll('[data-en]').forEach((b) => { const [e, m] = b.dataset.en.split(':'); b.onclick = enter(e, m); });
-  $('#ltrial').onclick = () => { state.trial = true; render(); };
+    <ul class="lpoints">${[1, 2, 3].map((i) => `<li><span class="n">${i}</span>${t('land_b' + i)}</li>`).join('')}</ul>
+    <div class="lwho">${who.map(([k, ti, d]) => `<div class="lcard"><span class="ei">${icon(ENTRY_IC[k])}</span><b>${t(ti)}</b><small>${t(d)}</small></div>`).join('')}</div>
+    <p class="lhint">${t('land_hint')}</p></div>`;
 }
 // 제목(로고)을 누르면 홈으로: 로그아웃 상태는 시작 화면, 로그인 상태는 각자의 첫 화면
 function goHome() {
@@ -394,10 +423,7 @@ function renderAccount(app) {
         <button id="regen">${t('btn_regen')}</button><div id="glist" class="sub" style="margin-top:10px">${t('loading')}</div></div>
         <div class="card"><h2>${t('consent_title')}</h2><label class="row"><input type="checkbox" id="consentwb" ${state.consent.wellbeing ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_wb')}</span></label><label class="row"><input type="checkbox" id="consentrs" ${state.consent.research ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_rs')}</span></label><p class="sub">${t('consent_note')} ${t('consent_rs_note')}</p></div>` : ''}`;
     bindOrgCard(); bindBackupCard();
-    $('#logout').onclick = async () => {
-      await flush(); try { await api('/api/logout', { method: 'POST' }); } catch {}
-      state.token = null; state.user = null; state.viewAs = null; state.ro = false; store.set('token', null); dirty.clear(); clearLocal(); state.tab = 'home'; render(); // 공용 기기에 학습 데이터가 남지 않도록 로컬 사본을 지운다
-    };
+    $('#logout').onclick = doLogout;
     const msg = (m) => { $('#accmsg').textContent = m; };
     $('#pwchg').onclick = async () => {
       try { const r = await api('/api/password', { method: 'POST', body: { current: $('#pwcur').value, next: $('#pwnew').value } }); state.token = r.token; store.set('token', r.token); $('#pwcur').value = $('#pwnew').value = ''; msg(t('pw_changed')); } catch (e) { msg(e.message); }

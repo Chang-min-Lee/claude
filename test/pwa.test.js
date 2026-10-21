@@ -40,7 +40,7 @@ test('한국어·베트남어 문구 키가 서로 같고, 코드가 쓰는 키�
   const used = new Set();
   for (const f of fs.readdirSync(PUB).filter((f) => f.endsWith('.js') && !['i18n.js', 'i18n2.js', 'tests.js', 'sw.js', 'theme.js'].includes(f)))
     for (const m of fs.readFileSync(path.join(PUB, f), 'utf8').matchAll(/\b(?:t|unit)\('([a-z0-9_]+)'/g)) used.add(m[1]);
-  const dynamic = ['int_wb_', 'tab_', 'sub_', 'kind_', 'gt_', 'st_', 'role_', 'int_', 'valid_', 'g_', 'lv_', 'lk', 'bd_', 'theme_', 'demo_', 'ot_', 'jb_', 'iv_', 'fb_', 'auth_tab_', 'ent_', 'login_as_', 'att_', 'en_', 'intake_', 'ct_', 'crs_why_', 'crs_tip_'];
+  const dynamic = ['int_wb_', 'tab_', 'sub_', 'kind_', 'gt_', 'st_', 'role_', 'int_', 'valid_', 'g_', 'lv_', 'lk', 'bd_', 'theme_', 'demo_', 'ot_', 'jb_', 'iv_', 'fb_', 'auth_tab_', 'ent_', 'login_as_', 'att_', 'en_', 'intake_', 'ct_', 'crs_why_', 'crs_tip_', 'land_b'];
   const undefinedKeys = [...used].filter((k) => !ko.includes(k) && !dynamic.includes(k));
   assert.deepEqual(undefinedKeys, [], '정의되지 않은 문구 키');
   // 동적으로 만드는 키(탭·서브탭 등)도 모두 정의돼 있어야 한다

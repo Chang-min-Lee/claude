@@ -415,3 +415,6 @@ Object.assign(UI.vi, { roster_sub: 'Xem nhanh tình hình hôm nay của học v
 Object.assign(UI.ko, { per_extend_lbl: "종료일 연장:" }); Object.assign(UI.vi, { per_extend_lbl: "Gia hạn ngày kết thúc:" });
 Object.assign(UI.ko, { gt_label: "목표 유형", gt_name: "목표 이름" }); Object.assign(UI.vi, { gt_label: "Loại mục tiêu", gt_name: "Tên mục tiêu" });
 Object.assign(UI.ko, { lbl_email: "이메일", lbl_pw: "비밀번호" }); Object.assign(UI.vi, { lbl_email: "Email", lbl_pw: "Mật khẩu" });
+
+Object.assign(UI.ko, { side_login: '로그인', side_new: '처음이신가요?', side_trial: '가입 없이 체험', land_hint: '왼쪽 메뉴에서 나에게 맞는 입구를 골라 로그인하세요.' });
+Object.assign(UI.vi, { side_login: 'Đăng nhập', side_new: 'Lần đầu sử dụng?', side_trial: 'Dùng thử không cần đăng ký', land_hint: 'Chọn lối vào phù hợp ở menu bên trái để đăng nhập.' });
