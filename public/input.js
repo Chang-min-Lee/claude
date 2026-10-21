@@ -27,26 +27,47 @@ function basicCard(el) {
   const p = state.profile, v = state.viewAs, admin = roleOf() === 'admin';
   if (admin && !roster.loaded && !roster.loading) loadRoster().then(() => { if (state.tab === 'input') render(); });
   const sv = p.services || { study: true, career: true }, ot = p.orgType || '', hasClass = ['language', 'academy', 'studyroom'].includes(ot), isCafe = ot === 'studycafe';
+  const F = (id, label, inner, full) => `<div class="field${full ? ' full' : ''}"><label for="${id}">${label}</label>${inner}</div>`;
   el.innerHTML = `<div class="card">
-    <input type="text" id="bname" maxlength="20" placeholder="${t('reg_name')}" value="${esc(p.name)}">
-    <div class="row"><select id="bgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${p.group === k ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select>
-      <input type="text" id="bschool" maxlength="40" placeholder="${t('reg_school')}" value="${esc(p.school)}"></div>
-    <div class="row"><select id="borg"><option value="">${t('ot_none')}</option>${ORG_TYPES.map((k) => `<option value="${k}" ${p.orgType === k ? 'selected' : ''}>${t('ot_' + k)}</option>`).join('')}</select></div>
-    <div class="row">${hasClass ? `<input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}">` : ''}<select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select></div>
-    <div class="row"><label class="sub">${t('per_start')} <input type="date" id="bstart" value="${esc(p.startDate || '')}"></label><label class="sub">${t('per_end')} <input type="date" id="bend" value="${esc(p.endDate || '')}"></label>
-      <button type="button" data-bext="30">+${t('per_m', { n: 1 })}</button><button type="button" data-bext="90">+${t('per_m', { n: 3 })}</button><button type="button" data-bext="180">+${t('per_m', { n: 6 })}</button></div>
-    ${p.endDate ? `<p class="sub">${periodHint(p.endDate)}</p>` : `<p class="sub">${t('per_help')}</p>`}
-    ${isCafe ? `<div class="row"><input type="text" id="bseat" maxlength="20" placeholder="${t('cafe_seat')}" value="${esc(p.seat || '')}"><input type="text" id="bpass" maxlength="30" placeholder="${t('cafe_pass')}" value="${esc(p.passType || '')}"></div>` : ''}
-    <div class="row"><input type="text" id="bpname" maxlength="20" placeholder="${t('par_name')}" value="${esc(p.parentName || '')}"><input type="text" id="bpphone" maxlength="30" placeholder="${t('par_phone')}" value="${esc(p.parentPhone || '')}"></div>
-    <div class="row"><span class="sub">${t('ns_label')}</span><input type="date" id="bnext" value="${esc(p.nextSession || '')}" style="max-width:170px"></div>
-    <label class="row"><input type="checkbox" id="bs1" ${sv.study !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
-    <label class="row"><input type="checkbox" id="bs2" ${sv.career !== false ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
-    <textarea id="bnote" rows="2" maxlength="200" placeholder="${t('reg_note')}">${esc(p.note)}</textarea>
-    <p class="sub">${t('ta_note_help')}</p><textarea id="btnote" rows="2" maxlength="300" placeholder="${t('ta_note')}">${esc(p.teacherNote)}</textarea>
-    ${admin ? `<div class="row"><span class="sub">${t('in_teacher')}</span><select id="bteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${v.teacher?.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></div>` : ''}
-    ${v.managed ? `<label class="row"><input type="checkbox" id="brs" ${state.consent.research ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('consent_rs')}</span></label><p class="sub">${t('consent_rs_note')}</p>` : ''}
-    ${v.managed ? `<p>${t('in_code')}: <b style="font-size:1.2em;letter-spacing:2px">${esc(v.shareCode || '')}</b></p><p class="sub">${t('reg_code_help')}</p>` : `<p class="sub">${t('in_has_account')}</p>`}
-    <div class="row">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
+    <div class="fgrid">
+      ${F('bname', t('lbl_name'), `<input type="text" id="bname" maxlength="20" value="${esc(p.name)}">`)}
+      ${F('bgroup', t('lbl_group'), `<select id="bgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${p.group === k ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select>`)}
+      ${F('bschool', t('lbl_school'), `<input type="text" id="bschool" maxlength="40" value="${esc(p.school)}">`)}
+      ${F('bstatus', t('lbl_status'), `<select id="bstatus">${['active', 'paused', 'left'].map((k) => `<option value="${k}" ${(p.status || 'active') === k ? 'selected' : ''}>${t('en_' + k)}</option>`).join('')}</select>`)}
+    </div>
+    <div class="fsec">${t('fs_model')}</div>
+    <div class="fgrid">
+      ${F('borg', t('lbl_org'), `<select id="borg"><option value="">${t('ot_none')}</option>${ORG_TYPES.map((k) => `<option value="${k}" ${p.orgType === k ? 'selected' : ''}>${t('ot_' + k)}</option>`).join('')}</select>`, !hasClass && !isCafe)}
+      ${hasClass ? F('bclass', t('lbl_class'), `<input type="text" id="bclass" maxlength="40" placeholder="${t('cls_ph')}" value="${esc(p.className || '')}">`) : ''}
+      ${isCafe ? F('bseat', t('lbl_seat'), `<input type="text" id="bseat" maxlength="20" placeholder="A-12" value="${esc(p.seat || '')}">`) : ''}
+      ${isCafe ? F('bpass', t('lbl_pass'), `<input type="text" id="bpass" maxlength="30" placeholder="${t('cafe_pass')}" value="${esc(p.passType || '')}">`) : ''}
+    </div>
+    <div class="fsec">${t('fs_period')}</div>
+    <div class="fgrid">
+      ${F('bstart', t('per_start'), `<input type="date" id="bstart" value="${esc(p.startDate || '')}">`)}
+      ${F('bend', t('per_end'), `<input type="date" id="bend" value="${esc(p.endDate || '')}">`)}
+    </div>
+    <div class="row" style="margin-top:8px"><span class="sub">${t('per_extend_lbl')}</span><button type="button" class="sm" data-bext="30">+${t('per_m', { n: 1 })}</button><button type="button" class="sm" data-bext="90">+${t('per_m', { n: 3 })}</button><button type="button" class="sm" data-bext="180">+${t('per_m', { n: 6 })}</button></div>
+    <p class="fhint">${p.endDate ? periodHint(p.endDate) : t('per_help')}</p>
+    <div class="fsec">${t('fs_parent')}</div>
+    <div class="fgrid">
+      ${F('bpname', t('lbl_pname'), `<input type="text" id="bpname" maxlength="20" value="${esc(p.parentName || '')}">`)}
+      ${F('bpphone', t('lbl_pphone'), `<input type="text" id="bpphone" maxlength="30" inputmode="tel" value="${esc(p.parentPhone || '')}">`)}
+      ${F('bnext', t('ns_label'), `<input type="date" id="bnext" value="${esc(p.nextSession || '')}">`)}
+      ${admin ? F('bteacher', t('in_teacher'), `<select id="bteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${v.teacher?.id === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>`) : ''}
+    </div>
+    <div class="fsec">${t('fs_service')}</div>
+    <label class="check"><input type="checkbox" id="bs1" ${sv.study !== false ? 'checked' : ''}> <span>${t('svc_study')}</span></label>
+    <label class="check"><input type="checkbox" id="bs2" ${sv.career !== false ? 'checked' : ''}> <span>${t('svc_career')}</span></label>
+    <div class="fsec">${t('fs_memo')}</div>
+    <div class="fgrid">
+      ${F('bnote', t('lbl_note'), `<textarea id="bnote" rows="2" maxlength="200" placeholder="${t('reg_note')}">${esc(p.note)}</textarea>`, true)}
+      ${F('btnote', t('lbl_tnote'), `<textarea id="btnote" rows="2" maxlength="300" placeholder="${t('ta_note')}">${esc(p.teacherNote)}</textarea>`, true)}
+    </div>
+    <p class="fhint">${t('ta_note_help')}</p>
+    ${v.managed ? `<div class="fsec">${t('in_code')}</div><label class="check"><input type="checkbox" id="brs" ${state.consent.research ? 'checked' : ''}> <span>${t('consent_rs')}</span></label><p class="fhint">${t('consent_rs_note')}</p>
+      <p>${t('in_code')}: <b style="font-size:1.2em;letter-spacing:2px">${esc(v.shareCode || '')}</b></p><p class="fhint">${t('reg_code_help')}</p>` : `<p class="fhint">${t('in_has_account')}</p>`}
+    <div class="row" style="margin-top:16px">${inDel ? `<button style="color:var(--crit)" id="bdelok">${t('in_delete_confirm')}</button><button id="bdelno">${t('btn_cancel')}</button>` : `<button style="color:var(--crit)" id="bdel">${t('in_delete')}</button>`}<span class="sub" id="bmsg">${esc(inMsg)}</span></div></div>${parentLinkCard()}`;
   bindParentLinkCard();
   const upd = () => {
     p.name = $('#bname').value.trim() || p.name; p.group = $('#bgroup').value; p.school = $('#bschool').value.trim(); p.orgType = $('#borg').value; if ($('#bclass')) p.className = $('#bclass').value.trim(); p.status = $('#bstatus').value; p.startDate = $('#bstart').value; p.endDate = $('#bend').value; p.parentName = $('#bpname').value.trim(); p.parentPhone = $('#bpphone').value.trim(); p.nextSession = $('#bnext').value; if ($('#bseat')) { p.seat = $('#bseat').value.trim(); p.passType = $('#bpass').value.trim(); }

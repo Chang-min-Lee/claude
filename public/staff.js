@@ -52,17 +52,19 @@ function interventions(l) {
   if (l.flags.ddaySoon) out.push({ k: 'dday', sev: 1, tab: 'input', why: t('iv_dday_why', { n: l.goal.dday, label: l.goal.label || t('goal_title') }), todo: t('iv_dday_todo'), tpl: t('iv_dday_tpl', { name: nm, label: l.goal.label || t('goal_title'), n: l.goal.dday }) });
   return out.sort((a, b) => b.sev - a.sev);
 }
+iv.expand = iv.expand || new Set();
 function ivCard() {
   const rows = roster.learners.filter((l) => l.enroll !== 'left').map((l) => [l, interventions(l)]).filter(([, a]) => a.length).sort((x, y) => y[1][0].sev - x[1][0].sev);
-  if (!rows.length) return `<div class="card callout"><h2>✅ ${t('iv_title')}</h2><p>${t('iv_none')}</p>${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</div>`;
-  return `<div class="card"><h2>${t('iv_title')} <span class="sub">${rows.length}</span></h2><p class="sub">${t('iv_help')}</p>
-    ${rows.map(([l, arr]) => `<div class="iv"><div><b>${esc(l.name)}</b> ${l.className ? `<span class="sub">${esc(l.className)}</span>` : ''}</div>
-      <ul class="ivlist">${arr.map((a) => `<li><span class="tag ${a.sev >= 3 ? 'weak' : ''}">${t('iv_' + a.k)}</span> ${esc(a.why)}<br><span class="sub"><b>${t('iv_todo')}</b> ${esc(a.todo)}</span></li>`).join('')}</ul>
-      <div class="row"><button class="primary" data-ivopen="${esc(l.id)}:${arr[0].tab}">${t('iv_open')}</button><button data-ivmsg="${esc(l.id)}">${t('iv_msg_btn')}</button>${arr.some((a) => a.ext) ? `<button data-ivext="${esc(l.id)}:30">+${t('per_m', { n: 1 })} ${t('iv_extend')}</button><button data-ivext="${esc(l.id)}:90">+${t('per_m', { n: 3 })} ${t('iv_extend')}</button>` : ''}${l.flags.ended ? `<button data-ivleave="${esc(l.id)}" style="color:var(--crit)">${t('iv_leave')}</button>` : ''}${l.flags.idle || l.flags.validity || l.flags.lowAtt || l.flags.endSoon || l.flags.ended ? `<button data-ivsnooze="${esc(l.id)}">${t('iv_snooze')}</button>` : ''}</div>
-      ${iv.open === l.id ? `<div class="row"><textarea id="ivtext" rows="2" maxlength="500">${esc(iv.text)}</textarea></div><div class="row"><button class="primary" id="ivsend">${t('iv_send')}</button><button id="ivcancel">${t('btn_cancel')}</button></div>` : ''}</div>`).join('')}
-    ${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</div>`;
+  if (!rows.length) return `<div class="ivnone">✅ ${t('iv_none')}${iv.msg ? ` <span class="sub">${esc(iv.msg)}</span>` : ''}</div>`;
+  return `<section class="card ivcard"><div class="ivtop"><h2>${t('iv_title')} <span class="count">${rows.length}</span></h2></div><p class="sub">${t('iv_help')}</p>
+    ${rows.map(([l, arr]) => `<details class="ivrow" data-ivd="${esc(l.id)}" ${iv.expand.has(l.id) || iv.open === l.id ? 'open' : ''}><summary><b>${esc(l.name)}</b>${l.className ? `<span class="sub">${esc(l.className)}</span>` : ''}<span class="ivtags">${arr.map((a) => `<span class="tag ${a.sev >= 3 ? 'weak' : ''}">${t('iv_' + a.k)}</span>`).join('')}</span><span class="chev" aria-hidden="true">›</span></summary>
+      <div class="ivbody"><ul class="ivlist">${arr.map((a) => `<li>${esc(a.why)}<br><span class="sub"><b>${t('iv_todo')}</b> ${esc(a.todo)}</span></li>`).join('')}</ul>
+      <div class="row"><button class="primary sm" data-ivopen="${esc(l.id)}:${arr[0].tab}">${t('iv_open')}</button><button class="sm" data-ivmsg="${esc(l.id)}">${t('iv_msg_btn')}</button>${arr.some((a) => a.ext) ? `<button class="sm" data-ivext="${esc(l.id)}:30">+${t('per_m', { n: 1 })} ${t('iv_extend')}</button><button class="sm" data-ivext="${esc(l.id)}:90">+${t('per_m', { n: 3 })} ${t('iv_extend')}</button>` : ''}${l.flags.ended ? `<button class="sm" data-ivleave="${esc(l.id)}" style="color:var(--crit)">${t('iv_leave')}</button>` : ''}${l.flags.idle || l.flags.validity || l.flags.lowAtt || l.flags.endSoon || l.flags.ended ? `<button class="sm" data-ivsnooze="${esc(l.id)}">${t('iv_snooze')}</button>` : ''}</div>
+      ${iv.open === l.id ? `<div class="row"><textarea id="ivtext" rows="2" maxlength="500">${esc(iv.text)}</textarea></div><div class="row"><button class="primary sm" id="ivsend">${t('iv_send')}</button><button class="sm" id="ivcancel">${t('btn_cancel')}</button></div>` : ''}</div></details>`).join('')}
+    ${iv.msg ? `<p class="sub">${esc(iv.msg)}</p>` : ''}</section>`;
 }
 function bindIv(app) {
+  app.querySelectorAll('details[data-ivd]').forEach((d) => d.addEventListener('toggle', () => { d.open ? iv.expand.add(d.dataset.ivd) : iv.expand.delete(d.dataset.ivd); }));
   app.querySelectorAll('[data-ivopen]').forEach((b) => (b.onclick = () => { const [id, tab] = b.dataset.ivopen.split(':'); openStudent(id, tab); }));
   app.querySelectorAll('[data-ivmsg]').forEach((b) => (b.onclick = () => { const l = roster.learners.find((x) => x.id === b.dataset.ivmsg); iv.open = l.id; iv.text = (interventions(l).find((a) => a.tpl) || {}).tpl || ''; iv.msg = ''; render(); }));
   app.querySelectorAll('[data-ivext]').forEach((b) => (b.onclick = async () => { const [id, d] = b.dataset.ivext.split(':'); try { const r = await api(`/api/students/${id}/period`, { method: 'POST', body: { extendDays: +d, today: today() } }); iv.msg = t('iv_extended', { d: r.endDate }); } catch (e) { iv.msg = e.message; } roster.loaded = false; render(); }));
@@ -90,28 +92,36 @@ function renderRoster(app) {
   if (!roster.loaded && !roster.loading) loadRoster();
   const admin = roleOf() === 'admin', q = roster.q.trim().toLowerCase();
   const list = roster.learners.filter((l) => (!q || l.name.toLowerCase().includes(q)) && (!roster.teacher || (roster.teacher === '_none' ? !l.teacher : l.teacher?.id === roster.teacher)) && (!roster.watch || l.status === 'watch') && flagPass(l) && (!roster.cls || (l.className || '') === (roster.cls === '_none' ? '' : roster.cls)) && (roster.left || l.enroll !== 'left'));
-  const watchN = roster.learners.filter((l) => l.status === 'watch').length;
-  app.innerHTML = `${roster.learners.length ? `${ivCard()}<div class="card"><h2>${t('today_title')}</h2>${todayTiles()}</div>` : ''}${admin && !roster.learners.length && roster.loaded ? quickStart() : ''}<div class="card"><div class="row" style="justify-content:space-between"><h2 style="margin:0">${t('roster_title')} <span class="sub">${roster.learners.length}</span></h2><button class="primary" id="goreg">＋ ${t('tab_register')}</button></div>
-      <div class="row"><input type="text" id="rq" placeholder="${t('roster_search')}" value="${esc(roster.q)}">
-        ${admin ? `<select id="rt" style="max-width:170px"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</div>
-      <div class="row"><select id="rcls"><option value="">${t('cls_all')}</option>${[...new Set(roster.learners.map((l) => l.className || ''))].filter((n) => n).sort().map((n) => `<option value="${esc(n)}" ${roster.cls === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select><label style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rleft" ${roster.left ? 'checked' : ''} style="flex:none;width:20px"> <span class="sub">${t('cls_show_left')}</span></label></div>
-      <label class="row"><input type="checkbox" id="rw" ${roster.watch ? 'checked' : ''} style="flex:none;width:20px"> <span>${t('roster_watch_only')} <span class="sub">(${watchN})</span></span></label>
-      <div class="row"><input type="text" id="lcode" maxlength="8" placeholder="${t('code_ph')}" style="max-width:220px"><button id="lbtn">${t('btn_link')}</button><span class="sub" id="lmsg">${esc(roster.msg)}</span></div>
-      <div class="row"><button id="wsum">${t('ws_btn')}</button><button id="rcsv">${t('csv_btn')}</button><button id="rreload">${t('btn_reload')}</button></div>
-      ${roster.summary ? `<textarea id="wstext" rows="4" readonly>${esc(roster.summary)}</textarea><p class="sub" id="wscopy"></p>` : ''}
-      ${roster.err ? `<p class="sub">${esc(roster.err)}</p>` : ''}</div>
-    ${roster.loading && !roster.learners.length ? `<p class="sub">${t('loading')}</p>` : list.length ? `<div class="card"><div class="tscroll"><table class="wplan roster"><thead><tr><th></th><th>${t('roster_name')}</th><th>${t('roster_goal')}</th><th>${t('stat_streak')}</th><th>${t('last7')}</th><th>${t('roster_tasks')}</th><th>${t('rep_checkin_lbl')}</th><th>${t('roster_status')}</th>${admin ? `<th>${t('teacher_lbl')}</th>` : ''}<th></th></tr></thead><tbody>
-      ${list.map((l) => `<tr><td><input type="checkbox" data-sel="${esc(l.id)}" ${roster.sel.has(l.id) ? 'checked' : ''}></td>
-        <td class="subj">${esc(l.name)}${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}<br><span class="sub">${l.group ? esc(groupLabel(l.group)) : ''}${l.className ? ' · ' + esc(l.className) : ''}</span>${l.enroll === 'paused' ? ` <span class="tag">${t('en_paused')}</span>` : l.enroll === 'left' ? ` <span class="tag">${t('en_left')}</span>` : ''}${l.flags.ended ? ` <span class="tag weak">${t('per_tag_ended')}</span>` : l.flags.endSoon ? ` <span class="tag weak">${t('per_tag_soon', { n: l.endDays })}</span>` : ''}${l.nextSession && l.nextSession >= today() ? ` <span class="tag">📅 ${esc(l.nextSession.slice(5))}</span>` : ''}${l.awaiting ? ` <span class="tag strong">${t('flag_msg')}</span>` : ''}${flagReasons(l).length ? `<br><span class="sub">${flagReasons(l).map(esc).join(' · ')}</span>` : ''}</td>
-        <td class="detail">${esc(l.goal.label)}${ddayCell(l)}</td><td>${unit('unit_day', l.streak)}</td><td>${unit('unit_min', sum(l.week))}</td><td>${l.doneCount}/${l.doneCount + l.openCount}</td><td>${l.checkinsWeek}</td>
-        <td><span class="pill ${l.status}">${t('st_' + l.status)}</span></td>${admin ? `<td>${l.teacher ? esc(l.teacher.name) : `<span class="sub">${t('unassigned')}</span>`}</td>` : ''}
-        <td><button class="primary" data-open="${esc(l.id)}">${t('btn_open')}</button></td></tr>`).join('')}</tbody></table></div></div>` : `<div class="card"><p class="sub">${roster.learners.length ? t('roster_none_match') : t('roster_empty')}</p></div>`}
-    ${roster.learners.length ? `<div class="card"><h2>${t('bm_title')}</h2><p class="sub">${t('bm_help', { n: roster.sel.size })}</p><textarea id="bmtext" rows="2" maxlength="500" placeholder="${t('msg_ph')}">${esc(roster.bulkMsg)}</textarea><button class="primary" id="bmsend">${t('bm_send')}</button> <span class="sub" id="bmnote">${esc(roster.bulkNote)}</span></div>` : ''}`;
+  const avatar = (n) => { const h = [...n].reduce((a, c) => (a * 31 + c.charCodeAt(0)) >>> 0, 7) % 6; return `<span class="av av${h}" aria-hidden="true">${esc([...n.trim()][0] || '?')}</span>`; };
+  const L = roster.learners, cnt = { watch: L.filter((l) => l.status === 'watch').length, msg: L.filter((l) => l.awaiting).length, end: L.filter((l) => l.flags.endSoon || l.flags.ended).length, dday: L.filter((l) => l.flags.ddaySoon).length, idle: L.filter((l) => l.flags.idle).length };
+  const chip = (k, lb) => `<button class="sstat ${(k === 'watch' ? roster.watch : roster.flag === k) ? 'on' : ''} ${cnt[k] ? 'has' : ''}" data-flag="${k}"><b>${cnt[k]}</b> ${t(lb)}</button>`;
+  const rows = list.map((l) => `<div class="srow ${l.enroll === 'left' ? 'off' : ''}"><input type="checkbox" data-sel="${esc(l.id)}" ${roster.sel.has(l.id) ? 'checked' : ''} aria-label="${esc(l.name)}">
+      ${avatar(l.name)}<div class="smain"><b>${esc(l.name)}</b>${l.managed ? ` <span class="tag">${t('managed')}</span>` : ''}${l.enroll === 'paused' ? ` <span class="tag">${t('en_paused')}</span>` : l.enroll === 'left' ? ` <span class="tag">${t('en_left')}</span>` : ''}
+        <div class="sub">${l.group ? esc(groupLabel(l.group)) : ''}${l.className ? ' · ' + esc(l.className) : ''}${admin && l.teacher ? ' · ' + esc(l.teacher.name) : ''}</div>
+        <div class="stags">${l.awaiting ? `<span class="tag strong">${t('flag_msg')}</span>` : ''}${l.flags.ended ? `<span class="tag weak">${t('per_tag_ended')}</span>` : l.flags.endSoon ? `<span class="tag weak">${t('per_tag_soon', { n: l.endDays })}</span>` : ''}${l.nextSession && l.nextSession >= today() ? `<span class="tag">📅 ${esc(l.nextSession.slice(5))}</span>` : ''}</div></div>
+      <div class="sgoal">${l.goal.label ? `<span>${esc(l.goal.label)}</span>` : `<span class="sub">-</span>`}${ddayCell(l)}</div>
+      <div class="smet"><span title="${t('stat_streak')}">🔥 ${unit('unit_day', l.streak)}</span><span title="${t('last7')}">⏱ ${unit('unit_min', sum(l.week))}</span><span title="${t('roster_tasks')}">✓ ${l.doneCount}/${l.doneCount + l.openCount}</span></div>
+      <span class="pill ${l.status}">${t('st_' + l.status)}</span><button class="primary sm" data-open="${esc(l.id)}">${t('btn_open')}</button></div>`).join('');
+  const clsOpts = [...new Set(L.map((l) => l.className || ''))].filter((n) => n).sort();
+  app.innerHTML = `<div class="pagehead"><div><h1>${t('roster_title')} <span class="count">${L.length}</span></h1><p class="sub">${t('roster_sub')}</p></div><div class="actions"><button class="primary" id="goreg">＋ ${t('tab_register')}</button></div></div>
+    ${L.length ? ivCard() : ''}${admin && !L.length && roster.loaded ? quickStart() : ''}
+    ${L.length ? `<div class="statstrip">${chip('watch', 'st_watch')}${chip('msg', 'flag_msg')}${chip('end', 'tile_end')}${chip('dday', 'tile_dday')}${chip('idle', 'flag_idle')}</div>` : ''}
+    <div class="toolbar"><input type="search" id="rq" placeholder="🔎 ${t('roster_search')}" value="${esc(roster.q)}" aria-label="${t('roster_search')}">
+      ${admin ? `<select id="rt" aria-label="${t('teacher_lbl')}"><option value="">${t('roster_all_teachers')}</option><option value="_none" ${roster.teacher === '_none' ? 'selected' : ''}>${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}" ${roster.teacher === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}
+      <select id="rcls" aria-label="${t('cls_name')}"><option value="">${t('cls_all')}</option>${clsOpts.map((n) => `<option value="${esc(n)}" ${roster.cls === n ? 'selected' : ''}>${esc(n)}</option>`).join('')}</select>
+      <label class="chipbtn ${roster.left ? 'on' : ''}"><input type="checkbox" id="rleft" ${roster.left ? 'checked' : ''} hidden> ${t('cls_show_left')}</label>
+      <details class="more"><summary>${t('more')}</summary><div class="morebody">
+        <div class="row"><input type="text" id="lcode" maxlength="8" placeholder="${t('code_ph')}"><button id="lbtn">${t('btn_link')}</button></div><span class="sub" id="lmsg">${esc(roster.msg)}</span>
+        <div class="row"><button id="wsum">${t('ws_btn')}</button><button id="rcsv">${t('csv_btn')}</button><button id="rreload">${t('btn_reload')}</button></div>
+        ${roster.summary ? `<textarea id="wstext" rows="4" readonly>${esc(roster.summary)}</textarea><p class="sub" id="wscopy"></p>` : ''}</div></details></div>
+    ${roster.err ? `<p class="sub">${esc(roster.err)}</p>` : ''}
+    ${roster.loading && !L.length ? `<p class="sub">${t('loading')}</p>` : list.length ? `<div class="slist">${rows}</div>` : `<div class="empty"><div class="ei2">👥</div><p>${L.length ? t('roster_none_match') : t('roster_empty')}</p>${L.length ? '' : `<button class="primary" id="goreg2">＋ ${t('tab_register')}</button>`}</div>`}
+    ${L.length ? `<details class="card fold2"${roster.sel.size ? ' open' : ''}><summary>${t('bm_title')}</summary><p class="sub">${t('bm_help', { n: roster.sel.size })}</p><textarea id="bmtext" rows="2" maxlength="500" placeholder="${t('msg_ph')}">${esc(roster.bulkMsg)}</textarea><div class="row"><button class="primary" id="bmsend">${t('bm_send')}</button><span class="sub" id="bmnote">${esc(roster.bulkNote)}</span></div></details>` : ''}`;
   $('#rq').oninput = (e) => { roster.q = e.target.value; const pos = e.target.selectionStart; render(); const el = $('#rq'); el.focus(); el.setSelectionRange(pos, pos); };
   if ($('#rt')) $('#rt').onchange = (e) => { roster.teacher = e.target.value; render(); };
   $('#rcls').onchange = (e) => { roster.cls = e.target.value; render(); };
   $('#rleft').onchange = (e) => { roster.left = e.target.checked; render(); };
-  $('#rw').onchange = (e) => { roster.watch = e.target.checked; render(); };
+  if ($('#goreg2')) $('#goreg2').onclick = () => { state.tab = 'register'; render(); };
   $('#goreg').onclick = () => { state.tab = 'register'; render(); scrollTo(0, 0); };
   bindIv(app);
   app.querySelectorAll('[data-qs]').forEach((b) => (b.onclick = () => { state.tab = b.dataset.qs; render(); }));
@@ -141,20 +151,35 @@ let reg = { result: null, msg: '' };
 function renderRegister(app) {
   const admin = roleOf() === 'admin';
   if (admin && !roster.loaded && !roster.loading) loadRoster();
-  app.innerHTML = `<button id="regback">← ${t('tab_roster')}</button><div class="card"><h2>${t('reg_title')}</h2><p class="sub">${t('reg_desc')}</p>
-      <input type="text" id="rname" maxlength="20" placeholder="${t('reg_name')}">
-      <div class="row"><select id="rgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${k === 'high' ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select></div>
-      <div class="row"><input type="text" id="rschool" maxlength="40" placeholder="${t('reg_school')}"></div>
-      <div class="row"><select id="rgtype">${GOAL_TYPES.map((k) => `<option value="${k}">${t('gt_' + k)}</option>`).join('')}</select><input type="text" id="rglabel" maxlength="60" placeholder="${t('goal_label_ph')}"></div>
-      <div class="row"><span class="sub">${t('goal_date')}</span><input type="date" id="rgdate" style="max-width:170px"></div>
-      <label class="row"><input type="checkbox" id="rs1" checked style="flex:none;width:20px"> <span>${t('svc_study')}</span></label>
-      <label class="row"><input type="checkbox" id="rs2" checked style="flex:none;width:20px"> <span>${t('svc_career')}</span></label>
-      <div class="row"><label class="sub">${t('per_start')} <input type="date" id="rstart" value="${today()}"></label><label class="sub">${t('per_end')} <input type="date" id="rend"></label></div>
-      <div class="row"><select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'academy', 'studyroom', 'studycafe', 'consultant', 'self'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select></div>
-      ${admin ? `<div class="row"><select id="rteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select></div>` : ''}
-      <textarea id="rnote" rows="2" maxlength="200" placeholder="${t('reg_note')}"></textarea>
-      <p class="sub">${t('reg_consent_note')}</p>
-      <button class="primary" id="rsubmit">${t('reg_btn')}</button> <span class="sub" id="rmsg">${esc(reg.msg)}</span></div>
+  const F = (id, label, inner, full) => `<div class="field${full ? ' full' : ''}"><label for="${id}">${label}</label>${inner}</div>`;
+  app.innerHTML = `<button id="regback" class="sm">← ${t('tab_roster')}</button>
+    <div class="pagehead" style="margin-top:12px"><div><h1>${t('reg_title')}</h1><p class="sub">${t('reg_desc')}</p></div></div>
+    <div class="card">
+      <div class="fsec">${t('fs_basic')}</div>
+      <div class="fgrid">
+        ${F('rname', t('lbl_name'), `<input type="text" id="rname" maxlength="20" autofocus>`)}
+        ${F('rgroup', t('lbl_group'), `<select id="rgroup">${Object.keys(GROUPS).map((k) => `<option value="${k}" ${k === 'high' ? 'selected' : ''}>${groupLabel(k)}</option>`).join('')}</select>`)}
+        ${F('rschool', t('lbl_school'), `<input type="text" id="rschool" maxlength="40">`)}
+        ${admin ? F('rteacher', t('in_teacher'), `<select id="rteacher"><option value="">${t('unassigned')}</option>${roster.teachers.map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join('')}</select>`) : ''}
+      </div>
+      <div class="fsec">${t('fs_model')}</div>
+      <div class="fgrid">${F('rorg', t('lbl_org'), `<select id="rorg"><option value="">${t('ot_none')}</option>${['language', 'academy', 'studyroom', 'studycafe', 'consultant', 'self'].map((k) => `<option value="${k}">${t('ot_' + k)}</option>`).join('')}</select>`, true)}</div>
+      <div class="fsec">${t('fs_period')}</div>
+      <div class="fgrid">${F('rstart', t('per_start'), `<input type="date" id="rstart" value="${today()}">`)}${F('rend', t('per_end'), `<input type="date" id="rend">`)}</div>
+      <p class="fhint">${t('per_help')}</p>
+      <div class="fsec">${t('sub_goal')}</div>
+      <div class="fgrid">
+        ${F('rgtype', t('gt_label'), `<select id="rgtype">${GOAL_TYPES.map((k) => `<option value="${k}">${t('gt_' + k)}</option>`).join('')}</select>`)}
+        ${F('rgdate', t('goal_date'), `<input type="date" id="rgdate">`)}
+        ${F('rglabel', t('gt_name'), `<input type="text" id="rglabel" maxlength="60" placeholder="${t('goal_label_ph')}">`, true)}
+      </div>
+      <div class="fsec">${t('fs_service')}</div>
+      <label class="check"><input type="checkbox" id="rs1" checked> <span>${t('svc_study')}</span></label>
+      <label class="check"><input type="checkbox" id="rs2" checked> <span>${t('svc_career')}</span></label>
+      <div class="fsec">${t('fs_memo')}</div>
+      ${F('rnote', t('lbl_note'), `<textarea id="rnote" rows="2" maxlength="200" placeholder="${t('reg_note')}"></textarea>`, true)}
+      <p class="fhint">${t('reg_consent_note')}</p>
+      <div class="row" style="margin-top:14px"><button class="primary" id="rsubmit">${t('reg_btn')}</button><span class="sub" id="rmsg">${esc(reg.msg)}</span></div></div>
     ${reg.result ? `<div class="card callout"><h2>✅ ${t('reg_done', { name: esc(reg.result.name) })}</h2><p>${t('reg_code')}: <b style="font-size:1.3em;letter-spacing:2px">${esc(reg.result.shareCode)}</b></p><p class="sub">${t('reg_code_help')}</p><button class="primary" id="ropen">${t('reg_continue')}</button> <button id="rlist">${t('reg_to_list')}</button></div>` : ''}
     <div class="card"><h2>${t('bulk_title')}</h2><p class="sub">${t('bulk_help')}</p>
       <textarea id="bulk" rows="5" placeholder="${t('bulk_example')}: Nguyen Mai,high,Lê Quý Đôn,SAT 1400,2027-03-01">${esc(reg.bulk || '')}</textarea>

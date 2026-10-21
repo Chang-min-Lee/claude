@@ -432,21 +432,30 @@ function renderAccount(app) {
   const entry = state.entry || 'learner', mode = state.authMode || 'login';
   const allowedTabs = entry === 'learner' ? ['login', 'signup', 'claim'] : entry === 'guardian' ? ['login', 'signup'] : ['login'];
   const tabsHtml = allowedTabs.map((k) => `<button data-am="${k}" class="${mode === k || (mode === 'reset' && k === 'login') ? 'on' : ''}">${t('auth_tab_' + k)}</button>`).join('');
+  const F = (id, label, inner) => `<div class="field"><label for="${id}">${label}</label>${inner}</div>`;
   const forms = {
-    login: `<div class="card"><h2>${t('login_as_' + entry)}</h2><input type="text" id="lemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="password" id="lpw" placeholder="${t('pw_ph')}" autocomplete="current-password"></div><button class="primary" id="login">${t('btn_login')}</button> <button data-am="reset" class="sub">${t('auth_forgot')}</button>${entry === 'teacher' || entry === 'admin' ? `<p class="sub">${t('auth_staff_note')}</p>` : ''}</div>`,
-    signup: `<div class="card"><h2>${t('signup_title')}</h2>
-      <input type="text" id="sname" maxlength="20" placeholder="${t('name_ph')}"><div class="row"><input type="text" id="semail" placeholder="${t('email_ph')}"></div>
-      <div class="row"><input type="password" id="spw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div>
+    login: `<div class="card authcard"><h2>${t('login_as_' + entry)}</h2><div class="stack">
+      ${F('lemail', t('lbl_email'), `<input type="email" id="lemail" autocomplete="username" inputmode="email">`)}
+      ${F('lpw', t('lbl_pw'), `<input type="password" id="lpw" autocomplete="current-password">`)}
+      <button class="primary" id="login">${t('btn_login')}</button><button data-am="reset" class="linkbtn">${t('auth_forgot')}</button></div>
+      ${entry === 'teacher' || entry === 'admin' ? `<p class="fhint">${t('auth_staff_note')}</p>` : ''}</div>`,
+    signup: `<div class="card authcard"><h2>${t('signup_title')}</h2><div class="stack">
+      ${F('sname', t('lbl_name'), `<input type="text" id="sname" maxlength="20">`)}
+      ${F('semail', t('lbl_email'), `<input type="email" id="semail" autocomplete="username" inputmode="email">`)}
+      ${F('spw', t('pw_new'), `<input type="password" id="spw" autocomplete="new-password">`)}
       <input type="hidden" id="srole" value="${entry === 'guardian' ? 'guardian' : 'learner'}">
-      <label class="row"><input type="checkbox" id="sagree" style="flex:none;width:20px"> <span class="sub">${t('agree_label')} (<a href="?legal=privacy" target="_blank" rel="noopener">${t('agree_link')}</a>)</span></label>
-      <button class="primary" id="signup">${t('btn_signup')}</button>
-      <p class="sub">${t('minor_note')}</p></div>`,
-    claim: `<div class="card"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p>
-      <input type="text" id="ccode" maxlength="8" placeholder="${t('claim_code_ph')}"><div class="row"><input type="text" id="cemail" placeholder="${t('email_ph')}"></div>
-      <div class="row"><input type="password" id="cpw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button class="primary" id="claim">${t('claim_btn')}</button></div>`,
-    reset: `<div class="card"><h2>${t('reset_title')}</h2><p class="sub">${t('reset_desc')}</p>
-      <input type="text" id="rsemail" placeholder="${t('email_ph')}" autocomplete="username"><div class="row"><input type="text" id="rscode" maxlength="8" placeholder="${t('reset_code_ph')}"></div>
-      <div class="row"><input type="password" id="rspw" placeholder="${t('pw_new_ph')}" autocomplete="new-password"></div><button class="primary" id="rsgo">${t('reset_btn')}</button></div>`,
+      <label class="check"><input type="checkbox" id="sagree"> <span class="sub">${t('agree_label')} (<a href="?legal=privacy" target="_blank" rel="noopener">${t('agree_link')}</a>)</span></label>
+      <button class="primary" id="signup">${t('btn_signup')}</button></div><p class="fhint">${t('minor_note')}</p></div>`,
+    claim: `<div class="card authcard"><h2>${t('claim_title')}</h2><p class="sub">${t('claim_desc')}</p><div class="stack">
+      ${F('ccode', t('claim_code_ph'), `<input type="text" id="ccode" maxlength="8" autocapitalize="characters">`)}
+      ${F('cemail', t('lbl_email'), `<input type="email" id="cemail" inputmode="email">`)}
+      ${F('cpw', t('pw_new'), `<input type="password" id="cpw" autocomplete="new-password">`)}
+      <button class="primary" id="claim">${t('claim_btn')}</button></div></div>`,
+    reset: `<div class="card authcard"><h2>${t('reset_title')}</h2><p class="sub">${t('reset_desc')}</p><div class="stack">
+      ${F('rsemail', t('lbl_email'), `<input type="email" id="rsemail" autocomplete="username" inputmode="email">`)}
+      ${F('rscode', t('reset_code_ph'), `<input type="text" id="rscode" maxlength="8" autocapitalize="characters">`)}
+      ${F('rspw', t('pw_new'), `<input type="password" id="rspw" autocomplete="new-password">`)}
+      <button class="primary" id="rsgo">${t('reset_btn')}</button></div></div>`,
   };
   app.innerHTML = `${state.profile ? '' : `<button id="back">${t('btn_back')}</button>`}
     ${allowedTabs.length > 1 ? `<div class="subnav">${tabsHtml}</div>` : ''}${forms[mode]}<p class="sub" id="amsg"></p>`;
